@@ -1,4 +1,3 @@
-```java
 package com.globalnet.assetguard.infrastructure.outbound.persistence;
 
 import jakarta.persistence.*;
@@ -36,4 +35,3 @@ public class UserEntity {
     @Column(name = "status", nullable = false)
     private Boolean status;
 }
-```

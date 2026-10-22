@@ -1,0 +1,10 @@
+com/globalnet/assetguard/infrastructure/outbound/persistence/UserJpaRepository.class
+com/globalnet/assetguard/domain/model/User.class
+com/globalnet/assetguard/infrastructure/inbound/rest/dto/UserRequestDto$UserRequestDtoBuilder.class
+com/globalnet/assetguard/infrastructure/inbound/rest/dto/UserRequestDto.class
+com/globalnet/assetguard/AssetGuard2620Application.class
+com/globalnet/assetguard/domain/ports/output/UserRepositoryPort.class
+com/globalnet/assetguard/infrastructure/outbound/persistence/UserPersistenceAdapter.class
+com/globalnet/assetguard/infrastructure/outbound/persistence/UserEntity.class
+com/globalnet/assetguard/domain/model/User$UserBuilder.class
+com/globalnet/assetguard/infrastructure/outbound/persistence/UserEntity$UserEntityBuilder.class

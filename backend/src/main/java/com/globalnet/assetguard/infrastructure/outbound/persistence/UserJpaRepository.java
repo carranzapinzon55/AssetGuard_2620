@@ -1,4 +1,3 @@
-```java
 package com.globalnet.assetguard.infrastructure.outbound.persistence;
 
 import java.util.Optional;
@@ -9,4 +8,3 @@ import org.springframework.stereotype.Repository;
 public interface UserJpaRepository extends JpaRepository<UserEntity, Long> {
     Optional<UserEntity> findByEmail(String email);
 }
-```
