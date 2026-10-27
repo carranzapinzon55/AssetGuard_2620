@@ -1,0 +1,4 @@
+-------------------------------------------------------------------------------
+Test set: com.globalnet.assetguard.application.usecase.LoanUseCaseTest
+-------------------------------------------------------------------------------
+Tests run: 5, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.023 s -- in com.globalnet.assetguard.application.usecase.LoanUseCaseTest

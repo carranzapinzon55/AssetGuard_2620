@@ -1,7 +1,10 @@
 package com.globalnet.assetguard.infrastructure.outbound.persistence.entity;
 
 import com.globalnet.assetguard.infrastructure.outbound.persistence.UserEntity;
+import com.globalnet.assetguard.domain.model.Loan;
 import jakarta.persistence.Column;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
@@ -38,11 +41,13 @@ public class LoanEntity {
     @Column(name = "return_date_time")
     private LocalDateTime returnDateTime;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "status")
-    private String status;
+    private Loan.Status status;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "return_condition")
-    private String returnCondition;
+    private Loan.ReturnCondition returnCondition;
 
     @Column(name = "delay_days")
     private Integer delayDays;
@@ -54,4 +59,11 @@ public class LoanEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "asset_id")
     private AssetEntity asset;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "inspector_id")
+    private UserEntity inspector;
+
+    @Column(name = "rejection_reason")
+    private String rejectionReason;
 }

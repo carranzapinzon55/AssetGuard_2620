@@ -1,0 +1,151 @@
+type Query {
+    assets: [Asset!]!
+    loans: [Loan!]!
+    users: [User!]!
+    myLoanHistory: [Loan!]!
+    auditLogs(
+        serialNumber: String
+        technicianId: ID
+        startDate: String
+        endDate: String
+        status: LoanStatus
+        page: Int = 0
+        limit: Int = 20
+    ): LoanAuditPage!
+    dashboardMetrics: LoanDashboardMetrics!
+}
+
+type Mutation {
+    login(input: LoginInput!): LoginPayload!
+    createAsset(input: AssetInput!): Asset!
+    uploadAssetsBulk(input: BulkUploadInput!): BulkUploadPayload!
+    requestLoan(input: RequestLoanInput!): Loan!
+    approveLoan(input: ApproveLoanInput!): Loan!
+    rejectLoan(input: RejectLoanInput!): Loan!
+    returnLoan(input: ReturnLoanInput!): Loan!
+    createMaintenanceRecord(input: MaintenanceRecordInput!): MaintenanceRecord!
+}
+
+type LoginPayload {
+    token: String!
+    user: User!
+}
+
+type BulkUploadPayload {
+    importedCount: Int!
+    assets: [Asset!]!
+}
+
+enum LoanStatus {
+    PENDING
+    APPROVED
+    REJECTED
+    RETURNED
+}
+
+enum ReturnCondition {
+    GOOD
+    DAMAGED
+    LOST
+}
+
+type User {
+    id: ID!
+    fullName: String
+    email: String
+    role: String
+    status: Boolean
+}
+
+type Asset {
+    id: ID!
+    serialNumber: String!
+    model: String
+    estimatedValue: Float
+    status: String!
+    purchaseDate: String
+}
+
+type Loan {
+    id: ID!
+    requestDate: String
+    dueLocalDate: String
+    returnDateTime: String
+    status: LoanStatus
+    returnCondition: ReturnCondition
+    delayDays: Int
+    user: User
+    asset: Asset
+    inspector: User
+    rejectionReason: String
+}
+
+type LoanAuditPage {
+    loans: [Loan!]!
+    totalElements: Int!
+    page: Int!
+    limit: Int!
+    totalPages: Int!
+}
+
+type LoanDashboardMetrics {
+    estimatedLossValue: Float!
+    onTimeReturnPercentage: Float!
+    assetsCurrentlyInField: Int!
+}
+
+type MaintenanceRecord {
+    id: ID!
+    asset: Asset
+    providerName: String
+    reason: String
+    cost: Float
+    startDate: String
+    endDate: String
+}
+
+input AssetInput {
+    serialNumber: String!
+    model: String
+    estimatedValue: Float
+    status: String!
+    purchaseDate: String
+}
+
+input LoginInput {
+    email: String!
+    password: String!
+}
+
+input BulkUploadInput {
+    filename: String!
+    contentBase64: String!
+}
+
+input RequestLoanInput {
+    assetId: ID!
+    dueDate: String!
+}
+
+input ApproveLoanInput {
+    loanId: ID!
+}
+
+input RejectLoanInput {
+    loanId: ID!
+    reason: String!
+}
+
+input ReturnLoanInput {
+    loanId: ID!
+    condition: ReturnCondition!
+}
+
+input MaintenanceRecordInput {
+    assetId: ID!
+    providerName: String
+    reason: String
+    cost: Float
+    startDate: String
+    endDate: String
+}

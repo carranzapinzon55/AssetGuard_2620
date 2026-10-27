@@ -44,6 +44,11 @@ public class AssetPersistenceAdapter implements AssetRepositoryPort {
                 .toList();
     }
 
+    @Override
+    public long countCurrentlyInField() {
+        return assetJpaRepository.countByStatusIn(List.of("LOANED", "ON_LOAN"));
+    }
+
     private Asset toDomain(AssetEntity entity) {
         if (entity == null) {
             return null;

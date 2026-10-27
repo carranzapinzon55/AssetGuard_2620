@@ -14,13 +14,28 @@ import lombok.Setter;
 @AllArgsConstructor
 @Builder
 public class Loan {
+    public enum Status {
+        PENDING,
+        APPROVED,
+        REJECTED,
+        RETURNED
+    }
+
+    public enum ReturnCondition {
+        GOOD,
+        DAMAGED,
+        LOST
+    }
+
     private Long id;
     private LocalDateTime requestDate;
     private LocalDate dueLocalDate;
     private LocalDateTime returnDateTime;
-    private String status;
-    private String returnCondition;
+    private Status status;
+    private ReturnCondition returnCondition;
     private Integer delayDays;
     private User user;
     private Asset asset;
+    private User inspector;
+    private String rejectionReason;
 }

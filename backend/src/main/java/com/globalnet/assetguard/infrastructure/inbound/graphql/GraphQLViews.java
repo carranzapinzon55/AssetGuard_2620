@@ -53,11 +53,13 @@ public final class GraphQLViews {
             String requestDate,
             String dueLocalDate,
             String returnDateTime,
-            String status,
-            String returnCondition,
+            Loan.Status status,
+            Loan.ReturnCondition returnCondition,
             Integer delayDays,
             UserView user,
-            AssetView asset) {
+            AssetView asset,
+            UserView inspector,
+            String rejectionReason) {
         public static LoanView from(Loan loan) {
             return loan == null
                     ? null
@@ -70,7 +72,9 @@ public final class GraphQLViews {
                             loan.getReturnCondition(),
                             loan.getDelayDays(),
                             UserView.from(loan.getUser()),
-                            AssetView.from(loan.getAsset()));
+                            AssetView.from(loan.getAsset()),
+                            UserView.from(loan.getInspector()),
+                            loan.getRejectionReason());
         }
     }
 

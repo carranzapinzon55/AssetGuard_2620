@@ -13,4 +13,6 @@ public interface AssetRepositoryPort {
     Optional<Asset> findById(Long id);
 
     List<Asset> findAll();
+
+    long countCurrentlyInField();
 }

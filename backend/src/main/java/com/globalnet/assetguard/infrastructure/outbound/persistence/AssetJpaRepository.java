@@ -9,4 +9,6 @@ import org.springframework.stereotype.Repository;
 public interface AssetJpaRepository extends JpaRepository<AssetEntity, Long> {
 
     Optional<AssetEntity> findBySerialNumber(String serialNumber);
+
+    long countByStatusIn(Iterable<String> statuses);
 }

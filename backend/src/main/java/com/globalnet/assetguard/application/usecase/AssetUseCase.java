@@ -11,7 +11,7 @@ import org.springframework.stereotype.Service;
 public class AssetUseCase {
 
     private static final Set<String> ALLOWED_STATUSES =
-            Set.of("AVAILABLE", "ON_LOAN", "MAINTENANCE");
+            Set.of("AVAILABLE", "LOANED", "UNDER_MAINTENANCE", "LOST", "ON_LOAN", "MAINTENANCE");
 
     private final AssetRepositoryPort assetRepositoryPort;
 
@@ -36,7 +36,7 @@ public class AssetUseCase {
         }
         if (asset.getStatus() == null || !ALLOWED_STATUSES.contains(asset.getStatus())) {
             throw new IllegalArgumentException(
-                    "Asset status must be one of: AVAILABLE, ON_LOAN, MAINTENANCE");
+                    "Asset status must be a recognized lifecycle status");
         }
 
         return assetRepositoryPort.save(asset);
