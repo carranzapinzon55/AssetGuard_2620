@@ -4,6 +4,7 @@ import com.globalnet.assetguard.domain.model.Asset;
 import com.globalnet.assetguard.domain.ports.output.AssetRepositoryPort;
 import com.globalnet.assetguard.infrastructure.outbound.persistence.AssetJpaRepository;
 import com.globalnet.assetguard.infrastructure.outbound.persistence.entity.AssetEntity;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.stereotype.Repository;
 
@@ -33,6 +34,14 @@ public class AssetPersistenceAdapter implements AssetRepositoryPort {
     public Optional<Asset> findById(Long id) {
         return assetJpaRepository.findById(id)
                 .map(this::toDomain);
+    }
+
+    @Override
+    public List<Asset> findAll() {
+        return assetJpaRepository.findAll()
+                .stream()
+                .map(this::toDomain)
+                .toList();
     }
 
     private Asset toDomain(AssetEntity entity) {

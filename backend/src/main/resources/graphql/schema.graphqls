@@ -1,0 +1,75 @@
+type Query {
+    assets: [Asset!]!
+    loans: [Loan!]!
+    users: [User!]!
+}
+
+type Mutation {
+    createAsset(input: AssetInput!): Asset!
+    createLoan(input: LoanInput!): Loan!
+    createMaintenanceRecord(input: MaintenanceRecordInput!): MaintenanceRecord!
+}
+
+type User {
+    id: ID!
+    fullName: String
+    email: String
+    role: String
+    status: Boolean
+}
+
+type Asset {
+    id: ID!
+    serialNumber: String!
+    model: String
+    estimatedValue: Float
+    status: String!
+    purchaseDate: String
+}
+
+type Loan {
+    id: ID!
+    requestDate: String
+    dueLocalDate: String
+    returnDateTime: String
+    status: String
+    returnCondition: String
+    delayDays: Int
+    user: User
+    asset: Asset
+}
+
+type MaintenanceRecord {
+    id: ID!
+    asset: Asset
+    providerName: String
+    reason: String
+    cost: Float
+    startDate: String
+    endDate: String
+}
+
+input AssetInput {
+    serialNumber: String!
+    model: String
+    estimatedValue: Float
+    status: String!
+    purchaseDate: String
+}
+
+input LoanInput {
+    userId: ID!
+    assetId: ID!
+    requestDate: String
+    dueLocalDate: String
+    status: String
+}
+
+input MaintenanceRecordInput {
+    assetId: ID!
+    providerName: String
+    reason: String
+    cost: Float
+    startDate: String
+    endDate: String
+}

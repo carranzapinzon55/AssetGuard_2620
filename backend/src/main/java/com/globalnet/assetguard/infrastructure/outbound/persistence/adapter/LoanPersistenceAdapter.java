@@ -8,6 +8,7 @@ import com.globalnet.assetguard.infrastructure.outbound.persistence.LoanJpaRepos
 import com.globalnet.assetguard.infrastructure.outbound.persistence.UserEntity;
 import com.globalnet.assetguard.infrastructure.outbound.persistence.entity.AssetEntity;
 import com.globalnet.assetguard.infrastructure.outbound.persistence.entity.LoanEntity;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.stereotype.Repository;
 
@@ -31,6 +32,14 @@ public class LoanPersistenceAdapter implements LoanRepositoryPort {
     public Optional<Loan> findById(Long id) {
         return loanJpaRepository.findById(id)
                 .map(this::toDomain);
+    }
+
+    @Override
+    public List<Loan> findAll() {
+        return loanJpaRepository.findAll()
+                .stream()
+                .map(this::toDomain)
+                .toList();
     }
 
     private Loan toDomain(LoanEntity entity) {

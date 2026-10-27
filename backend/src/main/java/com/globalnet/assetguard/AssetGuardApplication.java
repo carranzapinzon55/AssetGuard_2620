@@ -4,10 +4,10 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 @SpringBootApplication
-public class AssetGuard2620Application {
+public class AssetGuardApplication {
 
-	public static void main(String[] args) {
-		SpringApplication.run(AssetGuard2620Application.class, args);
-	}
+    public static void main(String[] args) {
+        SpringApplication.run(AssetGuardApplication.class, args);
+    }
 
 }

@@ -2,6 +2,7 @@ package com.globalnet.assetguard.infrastructure.outbound.persistence;
 
 import com.globalnet.assetguard.domain.model.User;
 import com.globalnet.assetguard.domain.ports.output.UserRepositoryPort;
+import java.util.List;
 import org.springframework.stereotype.Repository;
 import java.util.Optional;
 
@@ -25,6 +26,14 @@ public class UserPersistenceAdapter implements UserRepositoryPort {
         UserEntity entity = toEntity(user);
         UserEntity savedEntity = userJpaRepository.save(entity);
         return toDomain(savedEntity);
+    }
+
+    @Override
+    public List<User> findAll() {
+        return userJpaRepository.findAll()
+                .stream()
+                .map(this::toDomain)
+                .toList();
     }
 
     private User toDomain(UserEntity entity) {
