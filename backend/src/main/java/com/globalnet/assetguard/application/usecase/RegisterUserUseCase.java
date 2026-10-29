@@ -40,6 +40,43 @@ public class RegisterUserUseCase {
         return persistNewUser(user);
     }
 
+    public User updateManagedUser(User changes) {
+        if (changes == null || changes.getId() == null) {
+            throw new IllegalArgumentException("User ID is required");
+        }
+        User existing = userRepositoryPort.findById(changes.getId())
+                .orElseThrow(() -> new NoSuchElementException("User not found with ID: " + changes.getId()));
+        if (changes.getFullName() == null || changes.getFullName().isBlank()) {
+            throw new IllegalArgumentException("Full name is required");
+        }
+        if (changes.getEmail() == null || changes.getEmail().isBlank()) {
+            throw new IllegalArgumentException("Email is required");
+        }
+
+        String normalizedEmail = changes.getEmail().trim().toLowerCase(Locale.ROOT);
+        if (!normalizedEmail.equalsIgnoreCase(existing.getEmail())
+                && userRepositoryPort.findByEmail(normalizedEmail).isPresent()) {
+            throw new IllegalArgumentException("Email is already registered");
+        }
+        String normalizedRole = changes.getRole() == null
+                ? existing.getRole()
+                : changes.getRole().toUpperCase(Locale.ROOT);
+        if (!Set.of("ADMIN", "INSPECTOR", "TECHNICIAN").contains(normalizedRole)) {
+            throw new IllegalArgumentException("User role is not allowed");
+        }
+
+        existing.setFullName(changes.getFullName().trim());
+        existing.setEmail(normalizedEmail);
+        existing.setRole(normalizedRole);
+        if (changes.getStatus() != null) {
+            existing.setStatus(changes.getStatus());
+        }
+        if (changes.getPassword() != null && !changes.getPassword().isBlank()) {
+            existing.setPassword(passwordEncoder.encode(changes.getPassword()));
+        }
+        return userRepositoryPort.save(existing);
+    }
+
     private User persistNewUser(User user) {
         if (user == null || user.getPassword() == null || user.getPassword().isBlank()) {
             throw new IllegalArgumentException("User and password are required");

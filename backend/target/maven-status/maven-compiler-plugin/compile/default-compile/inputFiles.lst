@@ -18,6 +18,7 @@
 /home/senaFactory/Desktop/AssetGuard_2620/backend/src/main/java/com/globalnet/assetguard/domain/ports/output/MaintenanceRecordRepositoryPort.java
 /home/senaFactory/Desktop/AssetGuard_2620/backend/src/main/java/com/globalnet/assetguard/domain/ports/output/TokenProviderPort.java
 /home/senaFactory/Desktop/AssetGuard_2620/backend/src/main/java/com/globalnet/assetguard/domain/ports/output/UserRepositoryPort.java
+/home/senaFactory/Desktop/AssetGuard_2620/backend/src/main/java/com/globalnet/assetguard/infrastructure/bootstrap/DefaultAdminInitializer.java
 /home/senaFactory/Desktop/AssetGuard_2620/backend/src/main/java/com/globalnet/assetguard/infrastructure/importer/ExcelCsvAssetImporter.java
 /home/senaFactory/Desktop/AssetGuard_2620/backend/src/main/java/com/globalnet/assetguard/infrastructure/inbound/graphql/AssetGraphQLController.java
 /home/senaFactory/Desktop/AssetGuard_2620/backend/src/main/java/com/globalnet/assetguard/infrastructure/inbound/graphql/AuthenticationGraphQLController.java

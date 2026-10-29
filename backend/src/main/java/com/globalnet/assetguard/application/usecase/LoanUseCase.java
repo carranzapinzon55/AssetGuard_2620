@@ -97,11 +97,24 @@ public class LoanUseCase {
 
     @Transactional
     public Loan returnAsset(Long loanId, Loan.ReturnCondition condition) {
-        return returnAsset(loanId, condition, null);
+        return returnAssetInternal(loanId, condition, null);
     }
 
     @Transactional
     public Loan returnAsset(Long loanId, Loan.ReturnCondition condition, Long borrowerId) {
+        if (borrowerId == null) {
+            throw new IllegalArgumentException("Borrower ID is required");
+        }
+        return returnAssetInternal(loanId, condition, borrowerId);
+    }
+
+    @Transactional
+    public Loan returnAssetAsInspector(Long loanId, Loan.ReturnCondition condition, Long inspectorId) {
+        requireActiveUserWithRole(inspectorId, "INSPECTOR");
+        return returnAssetInternal(loanId, condition, null);
+    }
+
+    private Loan returnAssetInternal(Long loanId, Loan.ReturnCondition condition, Long borrowerId) {
         if (condition == null) {
             throw new IllegalArgumentException("Return condition is required");
         }
@@ -209,5 +222,12 @@ public class LoanUseCase {
 
     public LoanDashboardMetrics dashboardMetrics() {
         return loanRepositoryPort.calculateDashboardMetrics();
+    }
+
+    public LoanDashboardMetrics dashboardMetrics(LocalDateTime startDate, LocalDateTime endDate) {
+        if (startDate != null && endDate != null && startDate.isAfter(endDate)) {
+            throw new IllegalArgumentException("startDate must be before or equal to endDate");
+        }
+        return loanRepositoryPort.calculateDashboardMetrics(startDate, endDate);
     }
 }

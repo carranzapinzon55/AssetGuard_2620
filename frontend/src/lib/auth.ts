@@ -39,7 +39,7 @@ export function clearSession(): void {
 }
 
 export function landingPath(role: UserRole): string {
-  if (role === "TECHNICIAN") return "/history";
-  if (role === "INSPECTOR") return "/loans";
-  return "/dashboard";
+  if (role === "TECHNICIAN") return "/workspace/history";
+  if (role === "INSPECTOR") return "/workspace/loans";
+  return "/workspace/dashboard";
 }

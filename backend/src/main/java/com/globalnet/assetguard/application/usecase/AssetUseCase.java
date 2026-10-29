@@ -50,6 +50,30 @@ public class AssetUseCase {
                 .orElseThrow(() -> new NoSuchElementException("Asset not found with ID: " + id));
     }
 
+    public Asset update(Long id, Asset changes) {
+        if (id == null || changes == null) {
+            throw new IllegalArgumentException("Asset ID and changes are required");
+        }
+        Asset existing = findById(id);
+        if (changes.getSerialNumber() == null || changes.getSerialNumber().isBlank()) {
+            throw new IllegalArgumentException("Asset serial number must not be blank");
+        }
+        String serialNumber = changes.getSerialNumber().trim();
+        Asset duplicate = assetRepositoryPort.findBySerialNumber(serialNumber).orElse(null);
+        if (duplicate != null && !id.equals(duplicate.getId())) {
+            throw new IllegalArgumentException("Asset serial number already exists: " + serialNumber);
+        }
+        if (changes.getStatus() == null || !ALLOWED_STATUSES.contains(changes.getStatus())) {
+            throw new IllegalArgumentException("Asset status must be a recognized lifecycle status");
+        }
+        existing.setSerialNumber(serialNumber);
+        existing.setModel(changes.getModel());
+        existing.setEstimatedValue(changes.getEstimatedValue());
+        existing.setPurchaseDate(changes.getPurchaseDate());
+        existing.setStatus(changes.getStatus());
+        return assetRepositoryPort.save(existing);
+    }
+
     public Asset findBySerialNumber(String serialNumber) {
         if (serialNumber == null || serialNumber.isBlank()) {
             throw new IllegalArgumentException("Asset serial number must not be blank");

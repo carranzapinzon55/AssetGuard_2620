@@ -1,4 +1,5 @@
-import { Suspense, type ReactNode } from "react";
+import type { ReactNode } from "react";
+import { Suspense } from "react";
 import { ProtectedShell } from "@/components/protected-shell";
 
 export default function WorkspaceLayout({ children }: { children: ReactNode }) {

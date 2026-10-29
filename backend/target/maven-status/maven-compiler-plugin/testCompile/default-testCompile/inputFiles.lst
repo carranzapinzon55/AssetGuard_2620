@@ -3,5 +3,6 @@
 /home/senaFactory/Desktop/AssetGuard_2620/backend/src/test/java/com/globalnet/assetguard/application/usecase/LoanReportingUseCaseTest.java
 /home/senaFactory/Desktop/AssetGuard_2620/backend/src/test/java/com/globalnet/assetguard/application/usecase/LoanUseCaseTest.java
 /home/senaFactory/Desktop/AssetGuard_2620/backend/src/test/java/com/globalnet/assetguard/application/usecase/RegisterUserUseCaseTest.java
+/home/senaFactory/Desktop/AssetGuard_2620/backend/src/test/java/com/globalnet/assetguard/infrastructure/bootstrap/DefaultAdminInitializerTest.java
 /home/senaFactory/Desktop/AssetGuard_2620/backend/src/test/java/com/globalnet/assetguard/infrastructure/importer/ExcelCsvAssetImporterTest.java
 /home/senaFactory/Desktop/AssetGuard_2620/backend/src/test/java/com/globalnet/assetguard/infrastructure/security/JwtTokenProviderTest.java

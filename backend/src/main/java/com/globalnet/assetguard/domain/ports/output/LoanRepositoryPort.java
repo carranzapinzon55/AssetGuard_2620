@@ -30,4 +30,6 @@ public interface LoanRepositoryPort {
             int limit);
 
     LoanDashboardMetrics calculateDashboardMetrics();
+
+    LoanDashboardMetrics calculateDashboardMetrics(LocalDateTime startDate, LocalDateTime endDate);
 }

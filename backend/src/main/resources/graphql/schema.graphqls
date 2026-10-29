@@ -2,6 +2,7 @@ type Query {
     assets: [Asset!]!
     loans: [Loan!]!
     users: [User!]!
+    maintenanceRecords: [MaintenanceRecord!]!
     myLoanHistory: [Loan!]!
     auditLogs(
         serialNumber: String
@@ -12,18 +13,22 @@ type Query {
         page: Int = 0
         limit: Int = 20
     ): LoanAuditPage!
-    dashboardMetrics: LoanDashboardMetrics!
+    dashboardMetrics(startDate: String, endDate: String): LoanDashboardMetrics!
 }
 
 type Mutation {
     login(input: LoginInput!): LoginPayload!
     createAsset(input: AssetInput!): Asset!
+    updateAsset(input: UpdateAssetInput!): Asset!
+    createUser(input: UserInput!): User!
+    updateUser(input: UpdateUserInput!): User!
     uploadAssetsBulk(input: BulkUploadInput!): BulkUploadPayload!
     requestLoan(input: RequestLoanInput!): Loan!
     approveLoan(input: ApproveLoanInput!): Loan!
     rejectLoan(input: RejectLoanInput!): Loan!
     returnLoan(input: ReturnLoanInput!): Loan!
     createMaintenanceRecord(input: MaintenanceRecordInput!): MaintenanceRecord!
+    completeMaintenance(input: CompleteMaintenanceInput!): MaintenanceRecord!
 }
 
 type LoginPayload {
@@ -110,6 +115,36 @@ input AssetInput {
     estimatedValue: Float
     status: String!
     purchaseDate: String
+}
+
+input UpdateAssetInput {
+    id: ID!
+    serialNumber: String!
+    model: String
+    estimatedValue: Float
+    status: String!
+    purchaseDate: String
+}
+
+input UserInput {
+    fullName: String!
+    email: String!
+    password: String!
+    role: String!
+    status: Boolean!
+}
+
+input UpdateUserInput {
+    id: ID!
+    fullName: String!
+    email: String!
+    password: String
+    role: String!
+    status: Boolean!
+}
+
+input CompleteMaintenanceInput {
+    recordId: ID!
 }
 
 input LoginInput {

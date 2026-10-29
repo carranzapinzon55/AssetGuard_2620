@@ -11,4 +11,6 @@ public interface MaintenanceRecordRepositoryPort {
     Optional<MaintenanceRecord> findById(Long id);
 
     List<MaintenanceRecord> findByAssetId(Long assetId);
+
+    List<MaintenanceRecord> findAll();
 }

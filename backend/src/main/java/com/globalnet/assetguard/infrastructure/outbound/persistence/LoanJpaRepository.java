@@ -48,9 +48,13 @@ public interface LoanJpaRepository extends JpaRepository<LoanEntity, Long> {
 		    where asset.id in (
 			select distinct loan.asset_id from loans loan
 			where loan.return_condition in ('DAMAGED', 'LOST')
+				  and (:startDate is null or loan.return_date_time >= :startDate)
+				  and (:endDate is null or loan.return_date_time <= :endDate)
 		    )
 		    """, nativeQuery = true)
-	    BigDecimal sumEstimatedLossValue();
+	BigDecimal sumEstimatedLossValue(
+			@Param("startDate") LocalDateTime startDate,
+			@Param("endDate") LocalDateTime endDate);
 
 	    @Query(value = """
 		    select case when count(*) = 0 then 0.0
@@ -60,6 +64,10 @@ public interface LoanJpaRepository extends JpaRepository<LoanEntity, Long> {
 		    where loan.status = 'RETURNED'
 		      and loan.return_date_time is not null
 		      and loan.due_local_date is not null
+							and (:startDate is null or loan.return_date_time >= :startDate)
+							and (:endDate is null or loan.return_date_time <= :endDate)
 		    """, nativeQuery = true)
-	    Double onTimeReturnPercentage();
+		Double onTimeReturnPercentage(
+						@Param("startDate") LocalDateTime startDate,
+						@Param("endDate") LocalDateTime endDate);
 }

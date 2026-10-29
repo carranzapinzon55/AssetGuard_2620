@@ -41,6 +41,14 @@ public class MaintenanceRecordPersistenceAdapter implements MaintenanceRecordRep
                 .toList();
     }
 
+    @Override
+    public List<MaintenanceRecord> findAll() {
+        return maintenanceRecordJpaRepository.findAll()
+                .stream()
+                .map(this::toDomain)
+                .toList();
+    }
+
     private MaintenanceRecord toDomain(MaintenanceRecordEntity entity) {
         if (entity == null) {
             return null;
@@ -48,7 +56,14 @@ public class MaintenanceRecordPersistenceAdapter implements MaintenanceRecordRep
 
         Asset asset = entity.getAsset() == null
                 ? null
-                : Asset.builder().id(entity.getAsset().getId()).build();
+            : Asset.builder()
+                .id(entity.getAsset().getId())
+                .serialNumber(entity.getAsset().getSerialNumber())
+                .model(entity.getAsset().getModel())
+                .estimatedValue(entity.getAsset().getEstimatedValue())
+                .status(entity.getAsset().getStatus())
+                .purchaseDate(entity.getAsset().getPurchaseDate())
+                .build();
 
         return MaintenanceRecord.builder()
                 .id(entity.getId())

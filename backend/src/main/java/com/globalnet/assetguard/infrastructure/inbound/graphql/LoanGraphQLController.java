@@ -70,8 +70,10 @@ public class LoanGraphQLController {
 
     @QueryMapping
     @PreAuthorize("hasRole('ADMIN')")
-    public LoanDashboardMetrics dashboardMetrics() {
-        return loanUseCase.dashboardMetrics();
+    public LoanDashboardMetrics dashboardMetrics(
+            @Argument String startDate,
+            @Argument String endDate) {
+        return loanUseCase.dashboardMetrics(parseDate(startDate, false), parseDate(endDate, true));
     }
 
     private LocalDateTime parseDate(String value, boolean endOfDay) {
@@ -119,12 +121,22 @@ public class LoanGraphQLController {
         }
 
     @MutationMapping
-    @PreAuthorize("hasRole('TECHNICIAN')")
+    @PreAuthorize("hasAnyRole('TECHNICIAN', 'INSPECTOR')")
     public GraphQLViews.LoanView returnLoan(@Argument("input") ReturnLoanInput input) {
-        return GraphQLViews.LoanView.from(
-                loanUseCase.returnAsset(
-                        input.loanId(), input.condition(), currentAuthenticatedUser.requirePrincipal().userId()));
+        Long actorId = currentAuthenticatedUser.requirePrincipal().userId();
+        if (isInspector()) {
+            return GraphQLViews.LoanView.from(
+                    loanUseCase.returnAssetAsInspector(input.loanId(), input.condition(), actorId));
         }
+        return GraphQLViews.LoanView.from(loanUseCase.returnAsset(
+                input.loanId(), input.condition(), actorId));
+        }
+
+    private boolean isInspector() {
+        return org.springframework.security.core.context.SecurityContextHolder.getContext()
+                .getAuthentication().getAuthorities().stream()
+                .anyMatch(authority -> "ROLE_INSPECTOR".equals(authority.getAuthority()));
+    }
 
     public record RequestLoanInput(Long assetId, String dueDate) {
     }

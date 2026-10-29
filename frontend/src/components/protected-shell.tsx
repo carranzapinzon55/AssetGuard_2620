@@ -3,36 +3,43 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  Activity,
   ArrowUpRight,
   Boxes,
+  ClipboardCheck,
   ClipboardList,
+  FileClock,
   LayoutDashboard,
   LogOut,
   PackageSearch,
+  Upload,
   ShieldCheck,
   UserRound,
+  Wrench,
 } from "lucide-react";
 import { useEffect, type ReactNode } from "react";
 import { landingPath, type UserRole } from "@/lib/auth";
 import { useAuth } from "@/components/auth-provider";
 
 const navigation = [
-  { href: "/dashboard", label: "Resumen", icon: LayoutDashboard, roles: ["ADMIN", "INSPECTOR", "TECHNICIAN"] },
-  { href: "/assets", label: "Activos", icon: Boxes, roles: ["ADMIN", "INSPECTOR", "TECHNICIAN"] },
-  { href: "/loans", label: "Préstamos", icon: ClipboardList, roles: ["ADMIN", "INSPECTOR", "TECHNICIAN"] },
-  { href: "/history", label: "Mi historial", icon: Activity, roles: ["TECHNICIAN"] },
-  { href: "/audit", label: "Auditoría", icon: ShieldCheck, roles: ["ADMIN", "INSPECTOR"] },
-  { href: "/metrics", label: "Indicadores", icon: Activity, roles: ["ADMIN"] },
+  { href: "/workspace/dashboard", label: "Resumen", icon: LayoutDashboard, roles: ["ADMIN", "INSPECTOR", "TECHNICIAN"] },
+  { href: "/workspace/assets", label: "Activos", icon: Boxes, roles: ["ADMIN", "INSPECTOR", "TECHNICIAN"] },
+  { href: "/workspace/loans", label: "Préstamos", icon: ClipboardList, roles: ["ADMIN", "INSPECTOR", "TECHNICIAN"] },
+  { href: "/workspace/maintenance", label: "Mantenimiento", icon: Wrench, roles: ["INSPECTOR"] },
+  { href: "/workspace/history", label: "Mis custodias", icon: FileClock, roles: ["TECHNICIAN"] },
+  { href: "/workspace/audit", label: "Auditoría", icon: ShieldCheck, roles: ["ADMIN", "INSPECTOR"] },
+  { href: "/workspace/users", label: "Usuarios", icon: ClipboardCheck, roles: ["ADMIN"] },
+  { href: "/workspace/bulk-upload", label: "Carga masiva", icon: Upload, roles: ["ADMIN"] },
 ] as const;
 
 const sectionTitles: Record<string, string> = {
-  dashboard: "Resumen operativo",
+  dashboard: "Dashboard y métricas",
   assets: "Inventario de activos",
   loans: "Gestión de préstamos",
-  history: "Mi historial de custodia",
+  maintenance: "Mantenimiento técnico",
+  history: "Mis custodias",
   audit: "Registro de auditoría",
-  metrics: "Indicadores de gestión",
+  users: "Gestión de usuarios",
+  "bulk-upload": "Carga masiva de activos",
 };
 
 function roleLabel(role: UserRole) {
@@ -43,12 +50,13 @@ export function ProtectedShell({ children }: { children: ReactNode }) {
   const { session, ready, signOut } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
-  const section = pathname.split("/")[1] || "dashboard";
+  const section = pathname.split("/")[2] || "dashboard";
 
   useEffect(() => {
     if (ready && !session) router.replace("/login");
-    if (ready && session && section !== "dashboard") {
-      const allowed = navigation.find((item) => item.href === `/${section}`)?.roles;
+    if (ready && session) {
+      const currentPath = `/workspace/${section}`;
+      const allowed = navigation.find((item) => item.href === currentPath)?.roles;
       if (allowed && !allowed.some((allowedRole) => allowedRole === session.user.role)) {
         router.replace(landingPath(session.user.role));
       }
@@ -77,7 +85,7 @@ export function ProtectedShell({ children }: { children: ReactNode }) {
   return (
     <div className="workspace">
       <aside className="sidebar">
-        <Link className="brand-lockup" href="/dashboard" aria-label="AssetGuard, resumen">
+        <Link className="brand-lockup" href="/workspace/dashboard" aria-label="AssetGuard, resumen">
           <span className="brand-symbol"><PackageSearch size={20} strokeWidth={2.2} /></span>
           <span className="brand-name">Asset<span>Guard</span></span>
         </Link>
@@ -91,10 +99,10 @@ export function ProtectedShell({ children }: { children: ReactNode }) {
         <p className="nav-caption">ESPACIO DE TRABAJO</p>
         <nav className="main-nav" aria-label="Navegación principal">
           {visibleNavigation.map(({ href, label, icon: Icon }) => {
-            const active = pathname === href || (href !== "/dashboard" && pathname.startsWith(`${href}/`));
+            const active = pathname === href || pathname.startsWith(`${href}/`);
             return (
               <Link key={href} href={href} className={`nav-link${active ? " active" : ""}`} aria-current={active ? "page" : undefined}>
-                <Icon size={17} strokeWidth={1.8} />
+                  <Icon size={17} strokeWidth={1.8} />
                 <span>{label}</span>
                 {active && <span className="nav-active-indicator" />}
               </Link>

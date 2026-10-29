@@ -1,26 +1,43 @@
 import { NextRequest, NextResponse } from "next/server";
 
-export async function POST(request: NextRequest) {
-  const backendUrl = process.env.BACKEND_GRAPHQL_URL ?? "http://localhost:8080/graphql";
-  const authorization = request.headers.get("authorization");
+const hopByHopHeaders = [
+  "connection",
+  "keep-alive",
+  "proxy-authenticate",
+  "proxy-authorization",
+  "te",
+  "trailer",
+  "transfer-encoding",
+  "upgrade",
+  "host",
+  "content-length",
+];
 
+function getForwardableHeaders(source: Headers): Headers {
+  const headers = new Headers(source);
+  const connectionTokens = headers.get("connection")
+    ?.split(",")
+    .map((header) => header.trim().toLowerCase()) ?? [];
+
+  for (const header of [...hopByHopHeaders, ...connectionTokens]) {
+    headers.delete(header);
+  }
+  return headers;
+}
+
+export async function POST(request: NextRequest) {
+    const backendUrl = process.env.BACKEND_GRAPHQL_URL ?? "http://127.0.0.1:8080/graphql";
   try {
     const upstream = await fetch(backendUrl, {
       method: "POST",
-      headers: {
-        "content-type": request.headers.get("content-type") ?? "application/json",
-        ...(authorization ? { authorization } : {}),
-      },
-      body: await request.text(),
+      headers: getForwardableHeaders(request.headers),
+      body: await request.arrayBuffer(),
       cache: "no-store",
     });
 
     return new NextResponse(upstream.body, {
       status: upstream.status,
-      headers: {
-        "content-type": upstream.headers.get("content-type") ?? "application/json",
-        "cache-control": "no-store",
-      },
+      headers: getForwardableHeaders(upstream.headers),
     });
   } catch {
     return NextResponse.json(

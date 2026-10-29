@@ -1,4 +1,4 @@
 -------------------------------------------------------------------------------
 Test set: com.globalnet.assetguard.AssetGuard2620ApplicationTests
 -------------------------------------------------------------------------------
-Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 6.551 s -- in com.globalnet.assetguard.AssetGuard2620ApplicationTests
+Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.900 s -- in com.globalnet.assetguard.AssetGuard2620ApplicationTests

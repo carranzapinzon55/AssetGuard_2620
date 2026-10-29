@@ -48,6 +48,19 @@ public class AssetGraphQLController {
 
     @MutationMapping
     @PreAuthorize("hasRole('ADMIN')")
+    public GraphQLViews.AssetView updateAsset(@Argument("input") UpdateAssetInput input) {
+        Asset changes = Asset.builder()
+                .serialNumber(input.serialNumber())
+                .model(input.model())
+                .estimatedValue(input.estimatedValue())
+                .status(input.status())
+                .purchaseDate(input.purchaseDate() == null ? null : LocalDate.parse(input.purchaseDate()))
+                .build();
+        return GraphQLViews.AssetView.from(assetUseCase.update(input.id(), changes));
+    }
+
+    @MutationMapping
+    @PreAuthorize("hasRole('ADMIN')")
     public BulkUploadPayload uploadAssetsBulk(@Argument("input") BulkUploadInput input) throws java.io.IOException {
         byte[] content;
         try {
@@ -71,6 +84,10 @@ public class AssetGraphQLController {
 
     public record BulkUploadInput(String filename, String contentBase64) {
     }
+
+        public record UpdateAssetInput(
+            Long id, String serialNumber, String model, Double estimatedValue, String status, String purchaseDate) {
+        }
 
     public record BulkUploadPayload(int importedCount, List<GraphQLViews.AssetView> assets) {
     }

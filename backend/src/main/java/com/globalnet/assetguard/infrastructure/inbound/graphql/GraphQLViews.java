@@ -28,6 +28,23 @@ public final class GraphQLViews {
         }
     }
 
+    public record UserMutationInput(
+            String fullName,
+            String email,
+            String password,
+            String role,
+            Boolean status) {
+        public User toDomain() {
+            return User.builder()
+                    .fullName(fullName)
+                    .email(email)
+                    .password(password)
+                    .role(role)
+                    .status(status)
+                    .build();
+        }
+    }
+
     public record AssetView(
             Long id,
             String serialNumber,

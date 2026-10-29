@@ -95,9 +95,14 @@ public class LoanPersistenceAdapter implements LoanRepositoryPort {
 
         @Override
         public LoanDashboardMetrics calculateDashboardMetrics() {
+            return calculateDashboardMetrics(null, null);
+        }
+
+        @Override
+        public LoanDashboardMetrics calculateDashboardMetrics(LocalDateTime startDate, LocalDateTime endDate) {
         return new LoanDashboardMetrics(
-            loanJpaRepository.sumEstimatedLossValue(),
-            Optional.ofNullable(loanJpaRepository.onTimeReturnPercentage()).orElse(0.0),
+                    loanJpaRepository.sumEstimatedLossValue(startDate, endDate),
+                    Optional.ofNullable(loanJpaRepository.onTimeReturnPercentage(startDate, endDate)).orElse(0.0),
             assetJpaRepository.countByStatusIn(List.of("LOANED", "ON_LOAN")));
         }
 

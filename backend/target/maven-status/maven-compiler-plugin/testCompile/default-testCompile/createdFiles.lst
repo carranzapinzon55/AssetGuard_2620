@@ -2,6 +2,6 @@ com/globalnet/assetguard/application/usecase/RegisterUserUseCaseTest.class
 com/globalnet/assetguard/application/usecase/LoanReportingUseCaseTest.class
 com/globalnet/assetguard/infrastructure/importer/ExcelCsvAssetImporterTest.class
 com/globalnet/assetguard/application/usecase/LoanUseCaseTest.class
-com/globalnet/assetguard/AssetGuard2620ApplicationTests.class
 com/globalnet/assetguard/application/usecase/BulkUploadAssetsUseCaseIntegrationTest.class
+com/globalnet/assetguard/AssetGuard2620ApplicationTests.class
 com/globalnet/assetguard/infrastructure/security/JwtTokenProviderTest.class

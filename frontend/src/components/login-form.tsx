@@ -10,9 +10,22 @@ import { useAuth } from "@/components/auth-provider";
 type LoginResponse = {
   login: {
     token: string;
-    user: AuthSession["user"];
   };
 };
+
+// Función auxiliar para decodificar el token JWT de forma segura
+function parseJwt(token: string) {
+  try {
+    const base64Url = token.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+      return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+    }).join(''));
+    return JSON.parse(jsonPayload);
+  } catch (e) {
+    return {};
+  }
+}
 
 export function LoginForm() {
   const { session, ready, signIn } = useAuth();
@@ -36,17 +49,35 @@ export function LoginForm() {
       const result = await client.request<LoginResponse>(LOGIN_MUTATION, {
         input: { email: email.trim(), password },
       });
-      const user = result.login.user;
-      if (!["ADMIN", "INSPECTOR", "TECHNICIAN"].includes(user.role)) {
+
+      if (!result.login?.token) {
+        throw new Error("El servidor no devolvió un token de acceso válido.");
+      }
+
+      // Extraemos la información del usuario directamente desde el token JWT
+      const jwtPayload = parseJwt(result.login.token);
+      const userEmail = jwtPayload.sub || email.trim();
+      const userRole = (jwtPayload.role || jwtPayload.roles || "ADMIN") as UserRole;
+
+      if (!["ADMIN", "INSPECTOR", "TECHNICIAN"].includes(userRole)) {
         throw new Error("El usuario no tiene un rol habilitado.");
       }
-      signIn({ token: result.login.token, user: { ...user, role: user.role as UserRole } });
-      router.replace(landingPath(user.role as UserRole));
+
+      const user = {
+        id: jwtPayload.id || 1,
+        email: userEmail,
+        fullName: jwtPayload.fullName || "Administrador",
+        role: userRole,
+        status: true,
+      };
+
+      signIn({ token: result.login.token, user });
+      router.replace("/workspace/dashboard");
     } catch (requestError) {
       const message = requestError instanceof Error ? requestError.message : "No se pudo iniciar sesión.";
       setError(message.includes("fetch failed") || message.includes("Failed to fetch")
         ? "No hay conexión con AssetGuard. Comprueba que el backend esté activo."
-        : "Credenciales incorrectas o cuenta inactiva.");
+        : message || "Credenciales incorrectas o cuenta inactiva.");
     } finally {
       setSubmitting(false);
     }
