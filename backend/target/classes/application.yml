@@ -22,5 +22,5 @@ server:
 
 security:
   jwt:
-    secret: ${JWT_SECRET}
+    secret: ${JWT_SECRET:claveSecretaSuperSeguraAssetGuard2026PorDefecto123456}
     expiration-ms: ${JWT_EXPIRATION_MS:3600000}

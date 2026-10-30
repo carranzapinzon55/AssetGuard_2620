@@ -19,8 +19,11 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.CellType;
+import org.apache.poi.ss.usermodel.CellValue;
 import org.apache.poi.ss.usermodel.DataFormatter;
 import org.apache.poi.ss.usermodel.DateUtil;
+import org.apache.poi.ss.usermodel.FormulaEvaluator;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
@@ -83,20 +86,17 @@ public class ExcelCsvAssetImporter implements AssetFileImporterPort {
             }
             var sheet = workbook.getSheetAt(0);
             Row headerRow = sheet.getRow(sheet.getFirstRowNum());
-            Map<String, Integer> headers = headerIndexes(headerRow, new DataFormatter());
             DataFormatter formatter = new DataFormatter();
+            FormulaEvaluator evaluator = workbook.getCreationHelper().createFormulaEvaluator();
+            Map<String, Integer> headers = headerIndexes(headerRow, formatter);
             List<AssetImportRow> rows = new ArrayList<>();
             for (int index = headerRow.getRowNum() + 1; index <= sheet.getLastRowNum(); index++) {
                 Row row = sheet.getRow(index);
                 if (row == null || isEmpty(row, formatter)) {
                     continue;
                 }
-                Cell dateCell = row.getCell(headers.get("purchasedate"));
-                rows.add(new AssetImportRow(index + 1, toAsset(index + 1,
-                        cellValue(row, headers, "serialnumber", formatter),
-                        cellValue(row, headers, "model", formatter),
-                        cellValue(row, headers, "estimatedvalue", formatter),
-                        cellValue(row, headers, "purchasedate", formatter), dateCell)));
+                rows.add(new AssetImportRow(index + 1,
+                    toXlsxAsset(index + 1, row, headers, formatter, evaluator)));
             }
             return rows;
         }
@@ -150,6 +150,113 @@ public class ExcelCsvAssetImporter implements AssetFileImporterPort {
         }
     }
 
+    private Asset toXlsxAsset(
+            int rowNumber,
+            Row row,
+            Map<String, Integer> headers,
+            DataFormatter formatter,
+            FormulaEvaluator evaluator) {
+        try {
+            Cell serialCell = row.getCell(headers.get("serialnumber"));
+            Cell modelCell = row.getCell(headers.get("model"));
+            Cell valueCell = row.getCell(headers.get("estimatedvalue"));
+            Cell dateCell = row.getCell(headers.get("purchasedate"));
+            String serial = formatter.formatCellValue(serialCell, evaluator);
+            String model = formatter.formatCellValue(modelCell, evaluator);
+
+            return Asset.builder()
+                    .serialNumber(serial == null ? null : serial.trim())
+                    .model(model == null ? null : model.trim())
+                    .estimatedValue(readNumericCell(valueCell, evaluator, rowNumber))
+                    .purchaseDate(readDateCell(dateCell, formatter, evaluator, rowNumber))
+                    .status("AVAILABLE")
+                    .build();
+        } catch (NumberFormatException | DateTimeParseException exception) {
+            throw new IllegalArgumentException(
+                    "Error en la fila " + rowNumber + ": " + exception.getMessage(), exception);
+        }
+    }
+
+    private Double readNumericCell(Cell cell, FormulaEvaluator evaluator, int rowNumber) {
+        if (cell == null || cell.getCellType() == CellType.BLANK) {
+            return null;
+        }
+
+        CellType cellType = cell.getCellType();
+        if (cellType == CellType.FORMULA) {
+            CellValue evaluated = evaluator.evaluate(cell);
+            if (evaluated == null || evaluated.getCellType() == CellType.BLANK) {
+                return null;
+            }
+            if (evaluated.getCellType() == CellType.NUMERIC) {
+                return evaluated.getNumberValue();
+            }
+            if (evaluated.getCellType() == CellType.STRING) {
+                return parseNumericText(evaluated.getStringValue(), rowNumber);
+            }
+            throw rowError(rowNumber, "estimatedValue debe ser numérico");
+        }
+        if (cellType == CellType.NUMERIC) {
+            return cell.getNumericCellValue();
+        }
+        if (cellType == CellType.STRING) {
+            return parseNumericText(cell.getStringCellValue(), rowNumber);
+        }
+        throw rowError(rowNumber, "estimatedValue debe ser numérico");
+    }
+
+    private Double parseNumericText(String value, int rowNumber) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return Double.valueOf(value.trim());
+        } catch (NumberFormatException exception) {
+            throw new IllegalArgumentException(
+                    "Error en la fila " + rowNumber + ": estimatedValue debe ser numérico", exception);
+        }
+    }
+
+    private LocalDate readDateCell(
+            Cell cell, DataFormatter formatter, FormulaEvaluator evaluator, int rowNumber) {
+        if (cell == null || cell.getCellType() == CellType.BLANK) {
+            return null;
+        }
+
+        CellType cellType = cell.getCellType();
+        boolean dateFormatted = DateUtil.isADateFormat(
+                cell.getCellStyle().getDataFormat(),
+                cell.getCellStyle().getDataFormatString());
+        if (dateFormatted && (cellType == CellType.NUMERIC || cellType == CellType.FORMULA)) {
+            double excelDate;
+            if (cellType == CellType.FORMULA) {
+                CellValue evaluated = evaluator.evaluate(cell);
+                if (evaluated == null || evaluated.getCellType() != CellType.NUMERIC) {
+                    throw rowError(rowNumber, "purchaseDate debe ser una fecha válida");
+                }
+                excelDate = evaluated.getNumberValue();
+            } else {
+                excelDate = cell.getNumericCellValue();
+            }
+            return DateUtil.getJavaDate(excelDate)
+                    .toInstant()
+                    .atZone(ZoneId.systemDefault())
+                    .toLocalDate();
+        }
+
+        String value = formatter.formatCellValue(cell, evaluator);
+        try {
+            return parseDate(value, null);
+        } catch (DateTimeParseException exception) {
+            throw new IllegalArgumentException(
+                    "Error en la fila " + rowNumber + ": purchaseDate debe ser una fecha válida", exception);
+        }
+    }
+
+    private IllegalArgumentException rowError(int rowNumber, String message) {
+        return new IllegalArgumentException("Error en la fila " + rowNumber + ": " + message);
+    }
+
     private LocalDate parseDate(String value, Cell cell) {
         if (cell != null && cell.getCellType() == org.apache.poi.ss.usermodel.CellType.NUMERIC
                 && DateUtil.isCellDateFormatted(cell)) {
@@ -166,10 +273,6 @@ public class ExcelCsvAssetImporter implements AssetFileImporterPort {
             }
         }
         throw new DateTimeParseException("Expected date as yyyy-MM-dd", value, 0);
-    }
-
-    private String cellValue(Row row, Map<String, Integer> headers, String column, DataFormatter formatter) {
-        return formatter.formatCellValue(row.getCell(headers.get(column)));
     }
 
     private String get(String[] values, Map<String, Integer> headers, String column) {
