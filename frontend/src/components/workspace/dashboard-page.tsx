@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Activity, AlertTriangle, CalendarDays, PackageCheck, RotateCcw } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
-import { Button, Feedback, FormField, LoadingRows, PageTitle, TextInput } from "@/components/workspace/ui";
+import { Button, EmptyState, Feedback, FormField, LoadingRows, PageTitle, TextInput } from "@/components/workspace/ui";
 import { DASHBOARD_QUERY } from "@/lib/operations";
 import { errorMessage, queryGraphQL } from "@/lib/workspace";
 
@@ -37,12 +37,12 @@ export function DashboardPage() {
 
   return (
     <div className="work-page">
-      <PageTitle eyebrow="GLOBALNET · RESUMEN EJECUTIVO" title="Dashboard de activos" description="Salud financiera y operativa de la flota de activos." />
+      <PageTitle eyebrow="GLOBALNET · RESUMEN EJECUTIVO" title="Panel de control de activos" description="Salud financiera y operativa de la flota de activos." />
       <Feedback error={error} />
       <section className="work-section dashboard-filters"><div className="filter-heading"><CalendarDays size={16} /><strong>Periodo de devoluciones</strong><span>Las existencias en campo muestran el estado actual.</span></div><div className="date-filter-controls"><FormField label="Desde"><TextInput type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} /></FormField><FormField label="Hasta"><TextInput type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} /></FormField><Button onClick={() => setAppliedRange({ startDate, endDate })}><Activity size={15} /> Aplicar periodo</Button><Button variant="quiet" onClick={() => { setStartDate(""); setEndDate(""); setAppliedRange({ startDate: "", endDate: "" }); setRefresh((value) => value + 1); }}><RotateCcw size={15} /> Limpiar</Button></div></section>
-      {loading ? <LoadingRows label="Calculando métricas" /> : metrics && <>
+      {loading ? <LoadingRows label="Calculando métricas" /> : !metrics ? <EmptyState title="No hay métricas disponibles" detail="No se encontraron datos para el periodo seleccionado." /> : <>
         <section className="metric-grid">
-          <article className="metric-panel loss"><div className="metric-panel-top"><span className="metric-icon"><AlertTriangle size={17} /></span><span className="work-eyebrow">MERMAS · PERIODO</span></div><strong className="metric-value">{money}</strong><p>Valor estimado de equipos dañados o perdidos.</p><div className="metric-foot"><span>ACTIVOS DAMAGED + LOST</span></div></article>
+          <article className="metric-panel loss"><div className="metric-panel-top"><span className="metric-icon"><AlertTriangle size={17} /></span><span className="work-eyebrow">MERMAS · PERIODO</span></div><strong className="metric-value">{money}</strong><p>Valor estimado de equipos dañados o perdidos.</p><div className="metric-foot"><span>ACTIVOS DAÑADOS + PERDIDOS</span></div></article>
           <article className="metric-panel"><div className="metric-panel-top"><span className="metric-icon"><RotateCcw size={17} /></span><span className="work-eyebrow">PUNTUALIDAD · PERIODO</span></div><strong className="metric-value">{punctuality.toFixed(1)}<small>%</small></strong><p>Préstamos devueltos en o antes de su vencimiento.</p><div className="metric-progress"><span style={{ width: `${punctuality}%` }} /></div><div className="metric-foot"><span>DEVOLUCIONES A TIEMPO</span><strong>{punctuality.toFixed(0)}%</strong></div></article>
           <article className="metric-panel field"><div className="metric-panel-top"><span className="metric-icon"><PackageCheck size={17} /></span><span className="work-eyebrow">CUSTODIA · ACTUAL</span></div><strong className="metric-value">{metrics.assetsCurrentlyInField}</strong><p>Activos actualmente asignados en préstamo.</p><div className="metric-foot"><span>ESTADO ACTUAL DE LA FLOTA</span></div></article>
         </section>

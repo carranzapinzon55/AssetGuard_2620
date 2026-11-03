@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { AlertCircle, CheckCircle2, LoaderCircle } from "lucide-react";
+import { statusLabel } from "@/lib/localization";
 
 export function PageTitle({ eyebrow, title, description, action }: {
   eyebrow: string;
@@ -28,7 +29,7 @@ export function StatusTag({ value }: { value?: string | null }) {
       : normalized === "REJECTED" || normalized === "LOST" || normalized === "INACTIVE"
         ? "bad"
         : "neutral";
-  return <span className={`status-tag ${category}`}>{normalized.replaceAll("_", " ")}</span>;
+  return <span className={`status-tag ${category}`}>{statusLabel(normalized)}</span>;
 }
 
 export function Feedback({ error, success }: { error?: string; success?: string }) {

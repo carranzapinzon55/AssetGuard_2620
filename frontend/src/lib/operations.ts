@@ -113,10 +113,10 @@ export const AUDIT_QUERY = `
   query AuditLogs($serialNumber: String, $technicianId: ID, $startDate: String, $endDate: String, $status: LoanStatus, $page: Int, $limit: Int) {
     auditLogs(serialNumber: $serialNumber, technicianId: $technicianId, startDate: $startDate, endDate: $endDate, status: $status, page: $page, limit: $limit) {
       loans {
-        id requestDate dueLocalDate returnDateTime status returnCondition delayDays rejectionReason
+        id requestDate dueLocalDate returnDateTime status returnCondition
         user { id fullName email }
         inspector { id fullName }
-        asset { id serialNumber model estimatedValue status }
+        asset { id serialNumber model }
       }
       totalElements page limit totalPages
     }

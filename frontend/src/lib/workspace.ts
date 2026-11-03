@@ -1,5 +1,6 @@
 import { GraphQLClient } from "graphql-request";
 import { createGraphQLClient } from "@/lib/graphql";
+import { GENERIC_ERROR_MESSAGE } from "@/lib/localization";
 
 export async function queryGraphQL<T>(document: string, variables?: Record<string, unknown>): Promise<T> {
   const client: GraphQLClient = createGraphQLClient();
@@ -7,11 +8,8 @@ export async function queryGraphQL<T>(document: string, variables?: Record<strin
 }
 
 export function errorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    const graphMessage = error.message.match(/"message":"([^"]+)"/)?.[1];
-    return graphMessage ?? error.message.replace(/^GraphQL Error \(Code: \d+\):\s*/, "");
-  }
-  return "La operación no pudo completarse.";
+  void error;
+  return GENERIC_ERROR_MESSAGE;
 }
 
 export type AssetItem = {

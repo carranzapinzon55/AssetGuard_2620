@@ -17,7 +17,8 @@ import {
   Wrench,
 } from "lucide-react";
 import { useEffect, type ReactNode } from "react";
-import { landingPath, type UserRole } from "@/lib/auth";
+import { landingPath } from "@/lib/auth";
+import { roleLabel } from "@/lib/localization";
 import { useAuth } from "@/components/auth-provider";
 
 const navigation = [
@@ -32,7 +33,7 @@ const navigation = [
 ] as const;
 
 const sectionTitles: Record<string, string> = {
-  dashboard: "Dashboard y métricas",
+  dashboard: "Panel de control y métricas",
   assets: "Inventario de activos",
   loans: "Gestión de préstamos",
   maintenance: "Mantenimiento técnico",
@@ -41,10 +42,6 @@ const sectionTitles: Record<string, string> = {
   users: "Gestión de usuarios",
   "bulk-upload": "Carga masiva de activos",
 };
-
-function roleLabel(role: UserRole) {
-  return role === "ADMIN" ? "Administrador" : role === "INSPECTOR" ? "Inspector" : "Técnico";
-}
 
 export function ProtectedShell({ children }: { children: ReactNode }) {
   const { session, ready, signOut } = useAuth();

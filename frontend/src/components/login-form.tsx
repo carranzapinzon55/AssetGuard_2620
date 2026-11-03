@@ -3,7 +3,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, Eye, EyeOff, KeyRound, LockKeyhole, Mail, PackageCheck, ShieldCheck } from "lucide-react";
-import { landingPath, type AuthSession, type UserRole } from "@/lib/auth";
+import { landingPath, type UserRole } from "@/lib/auth";
 import { createGraphQLClient, LOGIN_MUTATION } from "@/lib/graphql";
 import { useAuth } from "@/components/auth-provider";
 
@@ -22,7 +22,7 @@ function parseJwt(token: string) {
       return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
     }).join(''));
     return JSON.parse(jsonPayload);
-  } catch (e) {
+  } catch {
     return {};
   }
 }
@@ -66,18 +66,15 @@ export function LoginForm() {
       const user = {
         id: jwtPayload.id || 1,
         email: userEmail,
-        fullName: jwtPayload.fullName || "Administrador",
+        fullName: jwtPayload.fullName || userEmail,
         role: userRole,
         status: true,
       };
 
       signIn({ token: result.login.token, user });
       router.replace("/workspace/dashboard");
-    } catch (requestError) {
-      const message = requestError instanceof Error ? requestError.message : "No se pudo iniciar sesión.";
-      setError(message.includes("fetch failed") || message.includes("Failed to fetch")
-        ? "No hay conexión con AssetGuard. Comprueba que el backend esté activo."
-        : message || "Credenciales incorrectas o cuenta inactiva.");
+    } catch {
+      setError("No se pudo iniciar sesión. Verifica tus credenciales e inténtalo de nuevo.");
     } finally {
       setSubmitting(false);
     }
@@ -105,7 +102,7 @@ export function LoginForm() {
           </div>
         </div>
 
-        <div className="aside-footer"><span>GLOBALNET</span><span>ASSET OPERATIONS <b>·</b> INTERNAL</span></div>
+        <div className="aside-footer"><span>GLOBALNET</span><span>OPERACIONES DE ACTIVOS <b>·</b> INTERNO</span></div>
         <div className="aside-index" aria-hidden="true">AG<span> / </span>01</div>
       </section>
 
@@ -123,7 +120,7 @@ export function LoginForm() {
               <span>{submitting ? "Verificando acceso…" : "Entrar al sistema"}</span><ArrowRight size={17} />
             </button>
           </form>
-          <div className="login-card-footer"><span><span className="small-status-dot" /> ACCESO MONITORIZADO</span><span>¿Problemas de acceso? Contacta a soporte</span></div>
+          <div className="login-card-footer"><span><span className="small-status-dot" /> ACCESO MONITORIZADO</span><span>¿Problemas de acceso? Contacta con soporte</span></div>
         </div>
         <footer className="login-main-footer"><span>© 2026 GLOBALNET</span><span>ASSETGUARD <b>·</b> 2620</span></footer>
       </section>

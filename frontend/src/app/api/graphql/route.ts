@@ -26,7 +26,7 @@ function getForwardableHeaders(source: Headers): Headers {
 }
 
 export async function POST(request: NextRequest) {
-    const backendUrl = process.env.BACKEND_GRAPHQL_URL ?? "http://127.0.0.1:8080/graphql";
+    const backendUrl = "http://127.0.0.1:8080/graphql";
   try {
     const upstream = await fetch(backendUrl, {
       method: "POST",

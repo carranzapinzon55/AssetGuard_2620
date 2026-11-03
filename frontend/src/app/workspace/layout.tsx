@@ -9,3 +9,5 @@ export default function WorkspaceLayout({ children }: { children: ReactNode }) {
     </Suspense>
   );
 }
+
+export const instant = false;
