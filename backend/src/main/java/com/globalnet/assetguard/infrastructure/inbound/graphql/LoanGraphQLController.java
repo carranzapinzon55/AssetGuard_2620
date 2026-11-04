@@ -83,8 +83,13 @@ public class LoanGraphQLController {
         try {
             return LocalDateTime.parse(value);
         } catch (java.time.format.DateTimeParseException ignored) {
-            LocalDate date = LocalDate.parse(value);
-            return endOfDay ? date.plusDays(1).atStartOfDay().minusNanos(1) : date.atStartOfDay();
+            try {
+                LocalDate date = LocalDate.parse(value);
+                return endOfDay ? date.plusDays(1).atStartOfDay().minusNanos(1) : date.atStartOfDay();
+            } catch (java.time.format.DateTimeParseException exception) {
+                throw new IllegalArgumentException(
+                        "Date must use an ISO-8601 local date or date-time format.", exception);
+            }
         }
     }
 

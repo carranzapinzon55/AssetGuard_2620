@@ -1,15 +1,63 @@
-import { GraphQLClient } from "graphql-request";
+import { ClientError, GraphQLClient } from "graphql-request";
 import { createGraphQLClient } from "@/lib/graphql";
 import { GENERIC_ERROR_MESSAGE } from "@/lib/localization";
+import { clearSession } from "@/lib/auth";
+
+class GraphQLAuthorizationError extends Error {
+  constructor(message: string, cause: unknown) {
+    super(message, { cause });
+    this.name = "GraphQLAuthorizationError";
+  }
+}
 
 export async function queryGraphQL<T>(document: string, variables?: Record<string, unknown>): Promise<T> {
   const client: GraphQLClient = createGraphQLClient();
-  return client.request<T>(document, variables);
+  try {
+    return await client.request<T>(document, variables);
+  } catch (error) {
+    const authorizationFailure = getAuthorizationFailure(error);
+    if (authorizationFailure === "unauthenticated" && typeof window !== "undefined") {
+      clearSession();
+      window.location.replace("/login");
+    }
+    if (authorizationFailure) {
+      throw new GraphQLAuthorizationError(
+        authorizationFailure === "unauthenticated"
+          ? "Tu sesión venció. Inicia sesión nuevamente."
+          : "No tienes permisos para realizar esta operación.",
+        error,
+      );
+    }
+    throw error;
+  }
 }
 
 export function errorMessage(error: unknown): string {
-  void error;
+  if (error instanceof GraphQLAuthorizationError) return error.message;
   return GENERIC_ERROR_MESSAGE;
+}
+
+function getAuthorizationFailure(error: unknown): "unauthenticated" | "forbidden" | null {
+  if (!(error instanceof ClientError)) return null;
+
+  if (error.response.status === 401) return "unauthenticated";
+  if (error.response.status === 403) return "forbidden";
+
+  for (const graphQLError of error.response.errors ?? []) {
+    const classification = graphQLError.extensions?.classification;
+    const code = graphQLError.extensions?.code;
+    const identifiers = [classification, code]
+      .filter((value): value is string => typeof value === "string")
+      .map((value) => value.toUpperCase());
+    if (identifiers.some((value) => ["UNAUTHORIZED", "UNAUTHENTICATED"].includes(value))) {
+      return "unauthenticated";
+    }
+    if (identifiers.some((value) => ["FORBIDDEN", "ACCESS_DENIED"].includes(value))) {
+      return "forbidden";
+    }
+  }
+
+  return null;
 }
 
 export type AssetItem = {

@@ -45,7 +45,7 @@ public class MaintenanceRecordGraphQLController {
     }
 
     @MutationMapping
-    @PreAuthorize("hasRole('INSPECTOR')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'INSPECTOR')")
     public GraphQLViews.MaintenanceRecordView completeMaintenance(@Argument("input") CompleteMaintenanceInput input) {
         return GraphQLViews.MaintenanceRecordView.from(maintenanceRecordUseCase.complete(input.recordId()));
     }

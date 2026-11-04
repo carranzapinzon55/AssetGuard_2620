@@ -22,10 +22,10 @@ import { roleLabel } from "@/lib/localization";
 import { useAuth } from "@/components/auth-provider";
 
 const navigation = [
-  { href: "/workspace/dashboard", label: "Resumen", icon: LayoutDashboard, roles: ["ADMIN", "INSPECTOR", "TECHNICIAN"] },
+  { href: "/workspace/dashboard", label: "Resumen", icon: LayoutDashboard, roles: ["ADMIN"] },
   { href: "/workspace/assets", label: "Activos", icon: Boxes, roles: ["ADMIN", "INSPECTOR", "TECHNICIAN"] },
   { href: "/workspace/loans", label: "Préstamos", icon: ClipboardList, roles: ["ADMIN", "INSPECTOR", "TECHNICIAN"] },
-  { href: "/workspace/maintenance", label: "Mantenimiento", icon: Wrench, roles: ["INSPECTOR"] },
+  { href: "/workspace/maintenance", label: "Mantenimiento", icon: Wrench, roles: ["ADMIN", "INSPECTOR"] },
   { href: "/workspace/history", label: "Mis custodias", icon: FileClock, roles: ["TECHNICIAN"] },
   { href: "/workspace/audit", label: "Auditoría", icon: ShieldCheck, roles: ["ADMIN", "INSPECTOR"] },
   { href: "/workspace/users", label: "Usuarios", icon: ClipboardCheck, roles: ["ADMIN"] },
@@ -48,19 +48,17 @@ export function ProtectedShell({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const section = pathname.split("/")[2] || "dashboard";
+  const allowedRoles = navigation.find((item) => item.href === `/workspace/${section}`)?.roles;
+  const hasRouteAccess = !allowedRoles || allowedRoles.some((role) => role === session?.user.role);
 
   useEffect(() => {
     if (ready && !session) router.replace("/login");
-    if (ready && session) {
-      const currentPath = `/workspace/${section}`;
-      const allowed = navigation.find((item) => item.href === currentPath)?.roles;
-      if (allowed && !allowed.some((allowedRole) => allowedRole === session.user.role)) {
-        router.replace(landingPath(session.user.role));
-      }
+    if (ready && session && !hasRouteAccess) {
+      router.replace(landingPath(session.user.role));
     }
-  }, [ready, session, router, section]);
+  }, [ready, session, router, hasRouteAccess]);
 
-  if (!ready || !session) {
+  if (!ready || !session || !hasRouteAccess) {
     return (
       <main className="session-check" aria-label="Comprobando sesión">
         <span className="loading-mark" />
@@ -82,7 +80,7 @@ export function ProtectedShell({ children }: { children: ReactNode }) {
   return (
     <div className="workspace">
       <aside className="sidebar">
-        <Link className="brand-lockup" href="/workspace/dashboard" aria-label="AssetGuard, resumen">
+        <Link className="brand-lockup" href={landingPath(session.user.role)} aria-label="AssetGuard, inicio">
           <span className="brand-symbol"><PackageSearch size={20} strokeWidth={2.2} /></span>
           <span className="brand-name">Asset<span>Guard</span></span>
         </Link>

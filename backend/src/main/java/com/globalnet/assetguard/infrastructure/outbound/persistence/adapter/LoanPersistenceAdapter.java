@@ -59,16 +59,16 @@ public class LoanPersistenceAdapter implements LoanRepositoryPort {
                 userId, Loan.Status.APPROVED, today);
     }
 
-        @Override
-        public List<Loan> findByUserId(Long userId) {
+    @Override
+    public List<Loan> findByUserId(Long userId) {
         return loanJpaRepository.findByUser_IdOrderByRequestDateDesc(userId)
             .stream()
             .map(this::toDomain)
             .toList();
-        }
+    }
 
-        @Override
-        public LoanAuditPage searchAudit(
+    @Override
+    public LoanAuditPage searchAudit(
             String serialNumber,
             Long technicianId,
             LocalDateTime startDate,
@@ -79,32 +79,35 @@ public class LoanPersistenceAdapter implements LoanRepositoryPort {
         String normalizedSerial = serialNumber == null || serialNumber.isBlank()
             ? null
             : serialNumber.trim();
+
+        String statusStr = status != null ? status.name() : null;
+
         Page<LoanEntity> results = loanJpaRepository.searchAudit(
             normalizedSerial,
             technicianId,
             startDate,
             endDate,
-            status,
+            statusStr,
             PageRequest.of(page, limit));
         return new LoanAuditPage(
             results.getContent().stream().map(this::toDomain).toList(),
             results.getTotalElements(),
             results.getNumber(),
             results.getSize());
-        }
+    }
 
-        @Override
-        public LoanDashboardMetrics calculateDashboardMetrics() {
-            return calculateDashboardMetrics(null, null);
-        }
+    @Override
+    public LoanDashboardMetrics calculateDashboardMetrics() {
+        return calculateDashboardMetrics(null, null);
+    }
 
-        @Override
-        public LoanDashboardMetrics calculateDashboardMetrics(LocalDateTime startDate, LocalDateTime endDate) {
+    @Override
+    public LoanDashboardMetrics calculateDashboardMetrics(LocalDateTime startDate, LocalDateTime endDate) {
         return new LoanDashboardMetrics(
-                    loanJpaRepository.sumEstimatedLossValue(startDate, endDate),
-                    Optional.ofNullable(loanJpaRepository.onTimeReturnPercentage(startDate, endDate)).orElse(0.0),
+            loanJpaRepository.sumEstimatedLossValue(startDate, endDate),
+            Optional.ofNullable(loanJpaRepository.onTimeReturnPercentage(startDate, endDate)).orElse(0.0),
             assetJpaRepository.countByStatusIn(List.of("LOANED", "ON_LOAN")));
-        }
+    }
 
     private Loan toDomain(LoanEntity entity) {
         if (entity == null) {

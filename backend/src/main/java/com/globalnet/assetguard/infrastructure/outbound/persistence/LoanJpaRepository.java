@@ -17,57 +17,66 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface LoanJpaRepository extends JpaRepository<LoanEntity, Long> {
 
-	boolean existsByUser_IdAndStatusAndDueLocalDateBeforeAndReturnDateTimeIsNull(
-			Long userId, Loan.Status status, LocalDate today);
+    boolean existsByUser_IdAndStatusAndDueLocalDateBeforeAndReturnDateTimeIsNull(
+            Long userId, Loan.Status status, LocalDate today);
 
-	    @EntityGraph(attributePaths = {"user", "asset", "inspector"})
-	    List<LoanEntity> findByUser_IdOrderByRequestDateDesc(Long userId);
+    @EntityGraph(attributePaths = {"user", "asset", "inspector"})
+    List<LoanEntity> findByUser_IdOrderByRequestDateDesc(Long userId);
 
-	    @EntityGraph(attributePaths = {"user", "asset", "inspector"})
-	    @Query("""
-		    select loan from LoanEntity loan
-		    join loan.asset asset
-		    where (:serialNumber is null or lower(asset.serialNumber) = lower(:serialNumber))
-		      and (:technicianId is null or loan.user.id = :technicianId)
-		      and (:startDate is null or loan.requestDate >= :startDate)
-		      and (:endDate is null or loan.requestDate <= :endDate)
-		      and (:status is null or loan.status = :status)
-		    order by loan.requestDate desc, loan.id desc
-		    """)
-	    Page<LoanEntity> searchAudit(
-		    @Param("serialNumber") String serialNumber,
-		    @Param("technicianId") Long technicianId,
-		    @Param("startDate") LocalDateTime startDate,
-		    @Param("endDate") LocalDateTime endDate,
-		    @Param("status") Loan.Status status,
-		    Pageable pageable);
+    @Query(value = """
+        select loan.* from loans loan
+        inner join assets asset on loan.asset_id = asset.id
+        where (:serialNumber is null or lower(cast(asset.serial_number as text)) = lower(cast(:serialNumber as text)))
+          and (:technicianId is null or loan.user_id = :technicianId)
+          and (CAST(:startDate AS timestamp) is null or loan.request_date >= CAST(:startDate AS timestamp))
+          and (CAST(:endDate AS timestamp) is null or loan.request_date <= CAST(:endDate AS timestamp))
+          and (:status is null or loan.status = :status)
+        order by loan.request_date desc, loan.id desc
+        """,
+        countQuery = """
+        select count(loan.id) from loans loan
+        inner join assets asset on loan.asset_id = asset.id
+        where (:serialNumber is null or lower(cast(asset.serial_number as text)) = lower(cast(:serialNumber as text)))
+          and (:technicianId is null or loan.user_id = :technicianId)
+          and (CAST(:startDate AS timestamp) is null or loan.request_date >= CAST(:startDate AS timestamp))
+          and (CAST(:endDate AS timestamp) is null or loan.request_date <= CAST(:endDate AS timestamp))
+          and (:status is null or loan.status = :status)
+        """,
+        nativeQuery = true)
+    Page<LoanEntity> searchAudit(
+        @Param("serialNumber") String serialNumber,
+        @Param("technicianId") Long technicianId,
+        @Param("startDate") LocalDateTime startDate,
+        @Param("endDate") LocalDateTime endDate,
+        @Param("status") String status,
+        Pageable pageable);
 
-	    @Query(value = """
-		    select coalesce(sum(asset.estimated_value), 0)
-		    from assets asset
-		    where asset.id in (
-			select distinct loan.asset_id from loans loan
-			where loan.return_condition in ('DAMAGED', 'LOST')
-				  and (:startDate is null or loan.return_date_time >= :startDate)
-				  and (:endDate is null or loan.return_date_time <= :endDate)
-		    )
-		    """, nativeQuery = true)
-	BigDecimal sumEstimatedLossValue(
-			@Param("startDate") LocalDateTime startDate,
-			@Param("endDate") LocalDateTime endDate);
+    @Query(value = """
+        select coalesce(sum(asset.estimated_value), 0)
+        from assets asset
+        where asset.id in (
+        select distinct loan.asset_id from loans loan
+        where loan.return_condition in ('DAMAGED', 'LOST')
+              and (CAST(:startDate AS timestamp) is null or loan.return_date_time >= CAST(:startDate AS timestamp))
+              and (CAST(:endDate AS timestamp) is null or loan.return_date_time <= CAST(:endDate AS timestamp))
+        )
+        """, nativeQuery = true)
+    BigDecimal sumEstimatedLossValue(
+        @Param("startDate") LocalDateTime startDate,
+        @Param("endDate") LocalDateTime endDate);
 
-	    @Query(value = """
-		    select case when count(*) = 0 then 0.0
-			 else 100.0 * sum(case when cast(loan.return_date_time as date) <= loan.due_local_date
-					       then 1 else 0 end) / count(*) end
-		    from loans loan
-		    where loan.status = 'RETURNED'
-		      and loan.return_date_time is not null
-		      and loan.due_local_date is not null
-							and (:startDate is null or loan.return_date_time >= :startDate)
-							and (:endDate is null or loan.return_date_time <= :endDate)
-		    """, nativeQuery = true)
-		Double onTimeReturnPercentage(
-						@Param("startDate") LocalDateTime startDate,
-						@Param("endDate") LocalDateTime endDate);
+    @Query(value = """
+        select case when count(*) = 0 then 0.0
+         else 100.0 * sum(case when cast(loan.return_date_time as date) <= loan.due_local_date
+                       then 1 else 0 end) / count(*) end
+        from loans loan
+        where loan.status = 'RETURNED'
+          and loan.return_date_time is not null
+          and loan.due_local_date is not null
+          and (CAST(:startDate AS timestamp) is null or loan.return_date_time >= CAST(:startDate AS timestamp))
+          and (CAST(:endDate AS timestamp) is null or loan.return_date_time <= CAST(:endDate AS timestamp))
+        """, nativeQuery = true)
+    Double onTimeReturnPercentage(
+        @Param("startDate") LocalDateTime startDate,
+        @Param("endDate") LocalDateTime endDate);
 }

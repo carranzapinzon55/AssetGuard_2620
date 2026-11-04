@@ -9,9 +9,17 @@ const getEndpoint = () => {
   return process.env.NEXT_PUBLIC_GRAPHQL_URL || "http://localhost:3000/api/graphql";
 };
 
-export function createGraphQLClient(token = readSession()?.token): GraphQLClient {
+export function createGraphQLClient(token?: string): GraphQLClient {
+  let resolvedToken = token;
+  
+  if (!resolvedToken && typeof window !== "undefined") {
+    // Intenta leerlo de readSession() o directamente de localStorage como respaldo seguro
+    const sessionData = readSession();
+    resolvedToken = sessionData?.token || localStorage.getItem("token") || "";
+  }
+
   return new GraphQLClient(getEndpoint(), {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    headers: resolvedToken ? { Authorization: `Bearer ${resolvedToken}` } : {},
   });
 }
 

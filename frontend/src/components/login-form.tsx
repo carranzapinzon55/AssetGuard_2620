@@ -13,18 +13,35 @@ type LoginResponse = {
   };
 };
 
-// Función auxiliar para decodificar el token JWT de forma segura
-function parseJwt(token: string) {
+type JwtClaims = Record<string, unknown>;
+const userRoles: readonly UserRole[] = ["ADMIN", "INSPECTOR", "TECHNICIAN"];
+
+function parseJwt(token: string): JwtClaims {
   try {
     const base64Url = token.split('.')[1];
     const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
     const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
       return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
     }).join(''));
-    return JSON.parse(jsonPayload);
+    const claims: unknown = JSON.parse(jsonPayload);
+    return claims !== null && typeof claims === "object" && !Array.isArray(claims)
+      ? claims as JwtClaims
+      : {};
   } catch {
     return {};
   }
+}
+
+function parseRole(value: unknown): UserRole | null {
+  const candidates = Array.isArray(value) ? value : [value];
+  for (const candidate of candidates) {
+    if (typeof candidate === "string") {
+      const normalized = candidate.replace(/^ROLE_/, "").trim();
+      const matched = userRoles.find((role) => role === normalized);
+      if (matched) return matched;
+    }
+  }
+  return null;
 }
 
 export function LoginForm() {
@@ -56,23 +73,25 @@ export function LoginForm() {
 
       // Extraemos la información del usuario directamente desde el token JWT
       const jwtPayload = parseJwt(result.login.token);
-      const userEmail = jwtPayload.sub || email.trim();
-      const userRole = (jwtPayload.role || jwtPayload.roles || "ADMIN") as UserRole;
-
-      if (!["ADMIN", "INSPECTOR", "TECHNICIAN"].includes(userRole)) {
+      const userEmail = typeof jwtPayload.sub === "string" ? jwtPayload.sub : email.trim();
+      const userRole = parseRole(jwtPayload.role) ?? parseRole(jwtPayload.roles) ?? parseRole(jwtPayload.authorities);
+      if (!userRole) {
         throw new Error("El usuario no tiene un rol habilitado.");
       }
 
       const user = {
-        id: jwtPayload.id || 1,
+        id: String(jwtPayload.id ?? ""),
         email: userEmail,
-        fullName: jwtPayload.fullName || userEmail,
+        fullName: typeof jwtPayload.fullName === "string" ? jwtPayload.fullName : userEmail,
         role: userRole,
         status: true,
       };
 
+      // Guardamos explícitamente el token en localStorage para asegurar la sesión
+      localStorage.setItem("token", result.login.token);
+
       signIn({ token: result.login.token, user });
-      router.replace("/workspace/dashboard");
+      router.replace(landingPath(userRole));
     } catch {
       setError("No se pudo iniciar sesión. Verifica tus credenciales e inténtalo de nuevo.");
     } finally {
