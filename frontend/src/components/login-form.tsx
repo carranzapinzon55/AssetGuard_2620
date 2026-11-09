@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Eye, EyeOff, KeyRound, LockKeyhole, Mail, PackageCheck, ShieldCheck } from "lucide-react";
+import { ArrowRight, Eye, EyeOff, KeyRound, LoaderCircle, LockKeyhole, Mail, PackageCheck, ShieldCheck } from "lucide-react";
 import { landingPath, type UserRole } from "@/lib/auth";
 import { createGraphQLClient, LOGIN_MUTATION } from "@/lib/graphql";
 import { useAuth } from "@/components/auth-provider";
@@ -127,7 +127,7 @@ export function LoginForm() {
 
       <section className="login-main">
         <div className="login-main-header"><span>PORTAL DE ACCESO</span><span className="secure-label"><LockKeyhole size={13} /> CONEXIÓN SEGURA</span></div>
-        <div className="login-card-wrap">
+        <div className="login-card-wrap login-card-surface">
           <div className="login-card-heading"><p className="eyebrow">BIENVENIDO DE NUEVO</p><h2>Iniciar sesión</h2><p>Introduce tus credenciales para entrar al espacio de trabajo.</p></div>
           <form className="login-form" onSubmit={handleSubmit}>
             <label htmlFor="email">Correo electrónico</label>
@@ -135,8 +135,8 @@ export function LoginForm() {
             <div className="password-label-row"><label htmlFor="password">Contraseña</label></div>
             <div className="input-wrap"><LockKeyhole size={17} /><input id="password" name="password" type={showPassword ? "text" : "password"} autoComplete="current-password" placeholder="Introduce tu contraseña" value={password} onChange={(event) => setPassword(event.target.value)} required /><button className="reveal-button" type="button" aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"} onClick={() => setShowPassword(!showPassword)}>{showPassword ? <EyeOff size={17} /> : <Eye size={17} />}</button></div>
             {error && <p className="form-error" role="alert">{error}</p>}
-            <button className="submit-button" type="submit" disabled={submitting || !ready}>
-              <span>{submitting ? "Verificando acceso…" : "Entrar al sistema"}</span><ArrowRight size={17} />
+            <button className="submit-button" type="submit" disabled={submitting || !ready} aria-busy={submitting}>
+              <span>{submitting ? "Verificando acceso…" : "Entrar al sistema"}</span>{submitting ? <LoaderCircle size={17} className="animate-spin" /> : <ArrowRight size={17} />}
             </button>
           </form>
           <div className="login-card-footer"><span><span className="small-status-dot" /> ACCESO MONITORIZADO</span><span>¿Problemas de acceso? Contacta con soporte</span></div>

@@ -11,15 +11,16 @@ import {
   LayoutDashboard,
   LogOut,
   PackageSearch,
-  Upload,
   ShieldCheck,
+  Upload,
   UserRound,
   Wrench,
 } from "lucide-react";
 import { useEffect, type ReactNode } from "react";
+import { useAuth } from "@/components/auth-provider";
+import { WorkspaceTools } from "@/components/workspace/workspace-tools";
 import { landingPath } from "@/lib/auth";
 import { roleLabel } from "@/lib/localization";
-import { useAuth } from "@/components/auth-provider";
 
 const navigation = [
   { href: "/workspace/dashboard", label: "Resumen", icon: LayoutDashboard, roles: ["ADMIN"] },
@@ -53,22 +54,14 @@ export function ProtectedShell({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (ready && !session) router.replace("/login");
-    if (ready && session && !hasRouteAccess) {
-      router.replace(landingPath(session.user.role));
-    }
+    if (ready && session && !hasRouteAccess) router.replace(landingPath(session.user.role));
   }, [ready, session, router, hasRouteAccess]);
 
   if (!ready || !session || !hasRouteAccess) {
-    return (
-      <main className="session-check" aria-label="Comprobando sesión">
-        <span className="loading-mark" />
-      </main>
-    );
+    return <main className="session-check" aria-label="Comprobando sesión"><span className="loading-mark" /></main>;
   }
 
-  const visibleNavigation = navigation.filter((item) =>
-    item.roles.some((allowedRole) => allowedRole === session.user.role),
-  );
+  const visibleNavigation = navigation.filter((item) => item.roles.some((role) => role === session.user.role));
   const title = sectionTitles[section] ?? "AssetGuard";
   const initials = (session.user.fullName || session.user.email)
     .split(/[\s@.]+/)
@@ -78,48 +71,38 @@ export function ProtectedShell({ children }: { children: ReactNode }) {
     .join("");
 
   return (
-    <div className="workspace">
-      <aside className="sidebar">
+    <div className="workspace min-h-screen">
+      <aside className="sidebar backdrop-blur-xl">
         <Link className="brand-lockup" href={landingPath(session.user.role)} aria-label="AssetGuard, inicio">
           <span className="brand-symbol"><PackageSearch size={20} strokeWidth={2.2} /></span>
           <span className="brand-name">Asset<span>Guard</span></span>
         </Link>
-
         <div className="workspace-switcher">
           <span className="workspace-monogram">GN</span>
           <span className="workspace-copy"><strong>GlobalNet</strong><small>Operaciones</small></span>
           <ArrowUpRight size={14} className="muted-icon" />
         </div>
-
         <p className="nav-caption">ESPACIO DE TRABAJO</p>
         <nav className="main-nav" aria-label="Navegación principal">
           {visibleNavigation.map(({ href, label, icon: Icon }) => {
             const active = pathname === href || pathname.startsWith(`${href}/`);
-            return (
-              <Link key={href} href={href} className={`nav-link${active ? " active" : ""}`} aria-current={active ? "page" : undefined}>
-                  <Icon size={17} strokeWidth={1.8} />
-                <span>{label}</span>
-                {active && <span className="nav-active-indicator" />}
-              </Link>
-            );
+            return <Link key={href} href={href} className={`nav-link${active ? " active" : ""}`} aria-current={active ? "page" : undefined}>
+              <Icon size={17} strokeWidth={1.8} /><span>{label}</span>{active && <span className="nav-active-indicator" />}
+            </Link>;
           })}
         </nav>
-
         <div className="sidebar-spacer" />
         <div className="sidebar-status"><span className="status-dot" /> Servicios conectados</div>
         <div className="profile-row">
           <span className="avatar">{initials || <UserRound size={16} />}</span>
           <span className="profile-copy"><strong>{session.user.fullName || session.user.email}</strong><small>{roleLabel(session.user.role)}</small></span>
-          <button className="icon-button logout-button" type="button" title="Cerrar sesión" aria-label="Cerrar sesión" onClick={() => { signOut(); router.replace("/login"); }}>
-            <LogOut size={16} />
-          </button>
+          <button className="icon-button logout-button" type="button" title="Cerrar sesión" aria-label="Cerrar sesión" onClick={() => { signOut(); router.replace("/login"); }}><LogOut size={16} /></button>
         </div>
       </aside>
-
       <div className="workspace-main">
         <header className="topbar">
           <div className="breadcrumb"><span>GlobalNet</span><span className="breadcrumb-separator">/</span><strong>{title}</strong></div>
-          <div className="topbar-right"><span className="environment-pill"><span /> SISTEMA ACTIVO</span><span className="topbar-date">AssetGuard 2620</span></div>
+          <div className="topbar-right"><WorkspaceTools /><span className="environment-pill"><span /> SISTEMA ACTIVO</span><span className="topbar-date">AssetGuard 2620</span></div>
         </header>
         <main className="page-content">{children}</main>
       </div>

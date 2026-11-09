@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useSearchParams } from "next/navigation";
 import { Boxes, ChevronLeft, ChevronRight, Edit3, Plus, Search, X } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import { Button, DataTable, EmptyState, Feedback, FormField, LoadingRows, PageTitle, SelectInput, StatusTag, TextInput } from "@/components/workspace/ui";
@@ -14,10 +15,11 @@ const blankAsset = { serialNumber: "", model: "", estimatedValue: "", purchaseDa
 
 export function AssetsPage() {
   const { session } = useAuth();
+  const searchParams = useSearchParams();
   const isAdmin = session?.user.role === "ADMIN";
   const [assets, setAssets] = useState<AssetItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(() => searchParams.get("search") ?? "");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [page, setPage] = useState(0);
   const [editing, setEditing] = useState<AssetItem | null>(null);
@@ -96,7 +98,7 @@ export function AssetsPage() {
         <div className="table-footer"><span>Mostrando {filtered.length ? page * pageSize + 1 : 0}–{Math.min((page + 1) * pageSize, filtered.length)} de {filtered.length}</span><div className="pagination"><button type="button" className="table-action" onClick={() => setPage((value) => Math.max(0, value - 1))} disabled={page === 0} aria-label="Página anterior"><ChevronLeft size={16} /></button><span>{page + 1} / {pages}</span><button type="button" className="table-action" onClick={() => setPage((value) => Math.min(pages - 1, value + 1))} disabled={page >= pages - 1} aria-label="Página siguiente"><ChevronRight size={16} /></button></div></div>
       </section>
       {formOpen && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setFormOpen(false); }}><section className="work-modal" role="dialog" aria-modal="true" aria-labelledby="asset-form-title"><div className="modal-heading"><div><p className="work-eyebrow">INVENTARIO</p><h2 id="asset-form-title">{editing ? "Editar activo" : "Registrar activo"}</h2></div><button type="button" className="table-action" aria-label="Cerrar" onClick={() => setFormOpen(false)}><X size={17} /></button></div>
-        <form className="work-form" onSubmit={saveAsset}><FormField label="Número de serie"><TextInput value={form.serialNumber} onChange={(event) => setForm({ ...form, serialNumber: event.target.value })} required /></FormField><FormField label="Modelo"><TextInput value={form.model} onChange={(event) => setForm({ ...form, model: event.target.value })} required /></FormField><div className="form-grid two-col"><FormField label="Valor estimado"><TextInput type="number" min="0.01" step="0.01" value={form.estimatedValue} onChange={(event) => setForm({ ...form, estimatedValue: event.target.value })} required /></FormField><FormField label="Fecha de compra"><TextInput type="date" value={form.purchaseDate} onChange={(event) => setForm({ ...form, purchaseDate: event.target.value })} required /></FormField></div><FormField label="Estado"><SelectInput value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value })}><option value="AVAILABLE">Disponible</option><option value="LOANED">En préstamo</option><option value="UNDER_MAINTENANCE">En mantenimiento</option><option value="LOST">Perdido</option></SelectInput></FormField><Feedback error={feedback.error} /><div className="modal-actions"><Button variant="secondary" type="button" onClick={() => setFormOpen(false)}>Cancelar</Button><Button type="submit" disabled={saving}>{saving ? "Guardando…" : "Guardar activo"}</Button></div></form>
+        <form className="work-form" onSubmit={saveAsset}><FormField label="Número de serie"><TextInput value={form.serialNumber} onChange={(event) => setForm({ ...form, serialNumber: event.target.value })} required /></FormField><FormField label="Modelo"><TextInput value={form.model} onChange={(event) => setForm({ ...form, model: event.target.value })} required /></FormField><div className="form-grid two-col"><FormField label="Valor estimado"><TextInput type="number" min="0.01" step="0.01" value={form.estimatedValue} onChange={(event) => setForm({ ...form, estimatedValue: event.target.value })} required /></FormField><FormField label="Fecha de compra"><TextInput type="date" value={form.purchaseDate} onChange={(event) => setForm({ ...form, purchaseDate: event.target.value })} required /></FormField></div><FormField label="Estado"><SelectInput value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value })}><option value="AVAILABLE">Disponible</option><option value="LOANED">En préstamo</option><option value="UNDER_MAINTENANCE">En mantenimiento</option><option value="LOST">Perdido</option></SelectInput></FormField><Feedback error={feedback.error} /><div className="modal-actions"><Button variant="secondary" type="button" onClick={() => setFormOpen(false)}>Cancelar</Button><Button type="submit" loading={saving}>Guardar activo</Button></div></form>
       </section></div>}
     </div>
   );

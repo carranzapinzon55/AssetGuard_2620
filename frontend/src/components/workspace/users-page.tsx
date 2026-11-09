@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useSearchParams } from "next/navigation";
 import { Edit3, Plus, Search, UserRound, X } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import { Button, DataTable, EmptyState, Feedback, FormField, LoadingRows, PageTitle, SelectInput, StatusTag, TextInput } from "@/components/workspace/ui";
@@ -15,9 +16,10 @@ const emptyForm = { fullName: "", email: "", password: "", role: "TECHNICIAN" as
 
 export function UsersPage() {
   const { session } = useAuth();
+  const searchParams = useSearchParams();
   const [users, setUsers] = useState<UserItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(() => searchParams.get("search") ?? "");
   const [editing, setEditing] = useState<UserItem | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [formOpen, setFormOpen] = useState(false);
@@ -146,7 +148,7 @@ export function UsersPage() {
             <Feedback error={feedback.error} />
             <div className="modal-actions pt-4 mt-2 border-t border-gray-100 flex items-center justify-end gap-3 flex-shrink-0">
               <Button variant="secondary" type="button" onClick={() => setFormOpen(false)}>Cancelar</Button>
-              <Button type="submit" disabled={saving}>{saving ? "Guardando…" : editing ? "Guardar cambios" : "Crear cuenta"}</Button>
+              <Button type="submit" loading={saving}>{editing ? "Guardar cambios" : "Crear cuenta"}</Button>
             </div>
           </form>
         </section>

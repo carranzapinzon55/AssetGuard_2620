@@ -16,17 +16,22 @@ export function PageTitle({ eyebrow, title, description, action }: {
   );
 }
 
-export function Button({ children, variant = "primary", ...props }: React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: "primary" | "secondary" | "quiet" | "danger" }) {
-  return <button className={`work-button ${variant}`} {...props}>{children}</button>;
+export function Button({ children, variant = "primary", loading = false, className = "", disabled, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: "primary" | "secondary" | "quiet" | "danger"; loading?: boolean }) {
+  return (
+    <button className={`work-button ${variant} ${className}`.trim()} disabled={disabled || loading} aria-busy={loading || undefined} {...props}>
+      {loading && <LoaderCircle size={15} className="animate-spin" aria-hidden="true" />}
+      {children}
+    </button>
+  );
 }
 
 export function StatusTag({ value }: { value?: string | null }) {
   const normalized = value?.toUpperCase() ?? "UNKNOWN";
   const category = normalized.includes("AVAILABLE") || normalized === "RETURNED" || normalized === "GOOD" || normalized === "ACTIVE"
     ? "good"
-    : normalized === "PENDING" || normalized === "ON_LOAN" || normalized === "LOANED"
-      ? "pending"
-      : normalized === "REJECTED" || normalized === "LOST" || normalized === "INACTIVE"
+    : normalized === "UNDER_MAINTENANCE" || normalized === "MAINTENANCE" || normalized === "PENDING"
+      ? "maintenance"
+      : normalized === "ON_LOAN" || normalized === "LOANED" || normalized === "REJECTED" || normalized === "LOST" || normalized === "INACTIVE"
         ? "bad"
         : "neutral";
   return <span className={`status-tag ${category}`}>{statusLabel(normalized)}</span>;
@@ -39,7 +44,21 @@ export function Feedback({ error, success }: { error?: string; success?: string 
 }
 
 export function LoadingRows({ label = "Cargando datos" }: { label?: string }) {
-  return <div className="loading-rows"><LoaderCircle size={17} className="spin" />{label}</div>;
+  return (
+    <div className="loading-rows" role="status" aria-label={label}>
+      <span className="sr-only">{label}</span>
+      <div className="w-full space-y-3 px-4 py-4" aria-hidden="true">
+        {Array.from({ length: 5 }, (_, row) => (
+          <div key={row} className="grid grid-cols-4 gap-4 animate-pulse border-b border-slate-100 py-3 dark:border-slate-700">
+            <span className="h-3 rounded-sm bg-slate-200 dark:bg-slate-700" />
+            <span className="h-3 rounded-sm bg-slate-100 dark:bg-slate-800" />
+            <span className="h-3 rounded-sm bg-slate-100 dark:bg-slate-800" />
+            <span className="h-3 rounded-sm bg-slate-200 dark:bg-slate-700" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export function EmptyState({ title, detail }: { title: string; detail: string }) {

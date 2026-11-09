@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type ChangeEvent } from "react";
-import { CheckCircle2, FileSpreadsheet, FileUp, FileWarning, Upload, X } from "lucide-react";
+import { CheckCircle2, FileSpreadsheet, FileUp, FileWarning, X } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import { Button, DataTable, Feedback, PageTitle, StatusTag } from "@/components/workspace/ui";
 import { UPLOAD_ASSETS } from "@/lib/operations";
@@ -9,14 +9,20 @@ import { errorMessage, queryGraphQL, type AssetItem } from "@/lib/workspace";
 
 type UploadResult = { uploadAssetsBulk: { importedCount: number; assets: AssetItem[] } };
 
-async function fileToBase64(file: File) {
-  const bytes = new Uint8Array(await file.arrayBuffer());
-  let binary = "";
-  const chunkSize = 0x8000;
-  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
-    binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
-  }
-  return btoa(binary);
+function fileToBase64(file: File, onProgress: (progress: number) => void) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onprogress = (event) => {
+      if (event.lengthComputable) onProgress(Math.round((event.loaded / event.total) * 100));
+    };
+    reader.onerror = () => reject(reader.error ?? new Error("No se pudo leer el archivo."));
+    reader.onload = () => {
+      const result = reader.result;
+      if (typeof result !== "string") return reject(new Error("No se pudo procesar el archivo."));
+      resolve(result.slice(result.indexOf(",") + 1));
+    };
+    reader.readAsDataURL(file);
+  });
 }
 
 export function BulkUploadPage() {
@@ -24,11 +30,14 @@ export function BulkUploadPage() {
   const [file, setFile] = useState<File | null>(null);
   const [dragging, setDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [readProgress, setReadProgress] = useState(0);
+  const [uploadStage, setUploadStage] = useState<"reading" | "sending" | "complete" | null>(null);
   const [result, setResult] = useState<UploadResult["uploadAssetsBulk"] | null>(null);
   const [error, setError] = useState("");
 
   function chooseFile(nextFile?: File) {
     setError(""); setResult(null);
+    setUploadStage(null); setReadProgress(0);
     if (!nextFile) return;
     const extension = nextFile.name.toLowerCase().split(".").pop();
     if (extension !== "csv" && extension !== "xlsx") {
@@ -45,14 +54,17 @@ export function BulkUploadPage() {
 
   async function upload() {
     if (!file || !session) return;
-    setUploading(true); setError(""); setResult(null);
+    setUploading(true); setError(""); setResult(null); setUploadStage("reading"); setReadProgress(0);
     try {
-      const contentBase64 = await fileToBase64(file);
+      const contentBase64 = await fileToBase64(file, setReadProgress);
+      setUploadStage("sending");
       const response = await queryGraphQL<UploadResult>(UPLOAD_ASSETS, { input: { filename: file.name, contentBase64 } });
       setResult(response.uploadAssetsBulk);
+      setUploadStage("complete"); setReadProgress(100);
       setFile(null);
     } catch (requestError) {
       setError(errorMessage(requestError));
+      setUploadStage(null);
     } finally { setUploading(false); }
   }
 
@@ -69,7 +81,14 @@ export function BulkUploadPage() {
         </label>
         {file && <div className="selected-file"><FileSpreadsheet size={18} /><div><strong>{file.name}</strong><small>{(file.size / 1024).toFixed(1)} KB</small></div><button className="table-action" type="button" onClick={() => setFile(null)} aria-label="Quitar archivo"><X size={15} /></button></div>}
         <div className="upload-columns"><div><p className="work-eyebrow">COLUMNAS REQUERIDAS</p><p>Número de serie (<code>serialNumber</code>), modelo (<code>model</code>), valor estimado (<code>estimatedValue</code>) y fecha de compra (<code>purchaseDate</code>).</p></div><div><p className="work-eyebrow">VALIDACIÓN</p><p>Número de serie único, importe positivo y fecha válida. El estado inicial será &quot;Disponible&quot;.</p></div></div>
-        <div className="upload-actions"><span><FileWarning size={15} /> Si una fila falla, se revierte el lote completo.</span><Button onClick={upload} disabled={!file || uploading}><Upload size={15} />{uploading ? "Validando e importando…" : "Importar activos"}</Button></div>
+        {uploadStage && <div className={`upload-progress ${uploadStage === "complete" ? "complete" : ""}`} role="status" aria-live="polite">
+          <div className="upload-progress-copy"><span>{uploadStage === "reading" ? "Preparando archivo" : uploadStage === "sending" ? "Validando e importando lote" : "Importación completada"}</span><strong>{uploadStage === "reading" ? `${readProgress}%` : uploadStage === "complete" ? "100%" : ""}</strong></div>
+          <div className="upload-progress-track" role="progressbar" aria-label="Progreso de carga" aria-valuemin={0} aria-valuemax={100} aria-valuenow={uploadStage === "complete" ? 100 : uploadStage === "reading" ? readProgress : undefined}>
+            <span className={uploadStage === "sending" ? "indeterminate" : ""} style={uploadStage === "reading" ? { width: `${readProgress}%` } : uploadStage === "complete" ? { width: "100%" } : undefined} />
+          </div>
+          {uploadStage === "sending" && <small>El servidor está procesando el lote; el porcentaje se confirmará al finalizar.</small>}
+        </div>}
+        <div className="upload-actions"><span><FileWarning size={15} /> Si una fila falla, se revierte el lote completo.</span><Button onClick={upload} loading={uploading} disabled={!file}>{uploading ? "Procesando archivo" : "Importar activos"}</Button></div>
       </section>
       {result && <section className="work-section results-section"><div className="section-toolbar"><div className="toolbar-title"><CheckCircle2 size={17} /><strong>Activos importados</strong><span>{result.importedCount}</span></div></div><DataTable headings={["Número de serie", "Modelo", "Valor estimado", "Fecha de compra", "Estado"]}>{result.assets.map((asset) => <tr key={asset.id}><td className="mono-cell">{asset.serialNumber}</td><td>{asset.model}</td><td>{asset.estimatedValue}</td><td>{asset.purchaseDate}</td><td><StatusTag value={asset.status} /></td></tr>)}</DataTable></section>}
     </div>
