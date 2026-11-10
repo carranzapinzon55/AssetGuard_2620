@@ -24,9 +24,7 @@ export function WorkspaceTools() {
 
   useEffect(() => {
     const stored = localStorage.getItem("assetguard-theme");
-    const initial = stored === "dark" || stored === "light"
-      ? stored
-      : window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    const initial = stored === "dark" ? "dark" : "light";
     document.documentElement.classList.toggle("dark", initial === "dark");
   }, []);
 
@@ -102,7 +100,7 @@ export function WorkspaceTools() {
     <button type="button" className="workspace-tool-button" onClick={openPalette} aria-label="Búsqueda global" title="Búsqueda global (Ctrl+K)">
       <Search size={15} /><span>Buscar</span><kbd><Command size={10} /> K</kbd>
     </button>
-    <button type="button" className="workspace-tool-button theme-toggle" onClick={toggleTheme} aria-label="Cambiar tema claro u oscuro" title="Cambiar tema">
+    <button type="button" className="workspace-tool-button theme-toggle" onClick={toggleTheme} aria-label="Cambiar tema claro u oscuro" title="Cambiar tema claro u oscuro">
       <Moon size={16} className="dark:hidden" /><Sun size={16} className="hidden dark:block" />
     </button>
     {open && <div className="fixed inset-0 z-50 flex items-start justify-center bg-slate-950/45 px-4 pt-[12vh] backdrop-blur-sm dark:bg-black/65" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setOpen(false); }}>

@@ -84,11 +84,11 @@ export function Button({ children, variant = "primary", loading = false, classNa
 
 export function StatusTag({ value }: { value?: string | null }) {
   const normalized = value?.toUpperCase() ?? "UNKNOWN";
-  const category = normalized.includes("AVAILABLE") || normalized === "RETURNED" || normalized === "GOOD" || normalized === "ACTIVE"
+  const category = normalized.includes("AVAILABLE") || normalized === "GOOD" || normalized === "ACTIVE" || normalized === "APPROVED"
     ? "good"
     : normalized === "UNDER_MAINTENANCE" || normalized === "MAINTENANCE" || normalized === "PENDING"
       ? "maintenance"
-      : normalized === "ON_LOAN" || normalized === "LOANED" || normalized === "REJECTED" || normalized === "LOST" || normalized === "INACTIVE"
+      : normalized === "ON_LOAN" || normalized === "LOANED" || normalized === "REJECTED" || normalized === "LOST" || normalized === "INACTIVE" || normalized === "OVERDUE" || normalized === "PAST_DUE"
         ? "bad"
         : "neutral";
   return <span className={`status-tag ${category}`}>{statusLabel(normalized)}</span>;

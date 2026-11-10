@@ -4,16 +4,16 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
-  --paper: #f3f5f0;
+  --paper: #f8fafc;
   --surface: #ffffff;
-  --ink: #1d2925;
-  --muted: #78827d;
-  --line: #e4e9e3;
-  --forest: #153f35;
-  --forest-deep: #102f29;
-  --mint: #c8ef8a;
-  --lime: #a7db69;
-  --red: #a23f36;
+  --ink: #0f172a;
+  --muted: #64748b;
+  --line: #e2e8f0;
+  --forest: #059669;
+  --forest-deep: #047857;
+  --mint: #d1fae5;
+  --lime: #34d399;
+  --red: #be123c;
   --sans: "Aptos", "Segoe UI", "Helvetica Neue", sans-serif;
 }
 
@@ -242,7 +242,7 @@ button { color: inherit; }
 }
 
 /* Obsidian and electric emerald workspace theme */
-:root {
+html.dark {
   --paper: #020617;
   --surface: #0b1220;
   --ink: #f1f5f9;
@@ -255,11 +255,12 @@ button { color: inherit; }
   --red: #fb7185;
 }
 
-body {
+html.dark body {
   background: #020617;
   color: #e2e8f0;
 }
 
+@scope (html.dark) {
 .workspace {
   position: relative;
   isolation: isolate;
@@ -578,6 +579,7 @@ body {
 .login-card-footer { color: #94a3b8; }
 .small-status-dot { background: #34d399; box-shadow: 0 0 10px rgb(16 185 129 / 70%); }
 .login-main-footer b { color: #34d399; }
+}
 
 html.dark { color-scheme: dark; }
 
@@ -590,6 +592,9 @@ textarea:focus-visible,
 [role="alertdialog"]:focus-visible {
   outline: 2px solid #34d399;
   outline-offset: 2px;
+  box-shadow: 0 0 0 4px #fff;
+}
+html.dark :is(button, a, input, select, textarea, [role="dialog"], [role="alertdialog"]):focus-visible {
   box-shadow: 0 0 0 4px #020617;
 }
 
@@ -643,7 +648,7 @@ html.dark .corporate-footer nav button:hover { color: #e2e8f0; }
     height: 2px;
     border-radius: 4px 4px 0 0;
   }
-  .login-page { background:
+  html.dark .login-page { background:
     radial-gradient(ellipse 90% 45% at 50% 0%, rgb(16 185 129 / 16%), transparent 75%),
     radial-gradient(ellipse 75% 55% at 100% 100%, rgb(8 145 178 / 10%), transparent 75%),
     #020617; }
