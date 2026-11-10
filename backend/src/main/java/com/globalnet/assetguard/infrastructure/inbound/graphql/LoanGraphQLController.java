@@ -126,12 +126,18 @@ public class LoanGraphQLController {
         }
 
     @MutationMapping
-    @PreAuthorize("hasAnyRole('TECHNICIAN', 'INSPECTOR')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TECHNICIAN', 'INSPECTOR')")
     public GraphQLViews.LoanView returnLoan(@Argument("input") ReturnLoanInput input) {
         Long actorId = currentAuthenticatedUser.requirePrincipal().userId();
         if (isInspector()) {
             return GraphQLViews.LoanView.from(
                     loanUseCase.returnAssetAsInspector(input.loanId(), input.condition(), actorId));
+        }
+        if (org.springframework.security.core.context.SecurityContextHolder.getContext()
+                .getAuthentication().getAuthorities().stream()
+                .anyMatch(authority -> "ROLE_ADMIN".equals(authority.getAuthority()))) {
+            return GraphQLViews.LoanView.from(
+                    loanUseCase.returnAssetAsAdmin(input.loanId(), input.condition(), actorId));
         }
         return GraphQLViews.LoanView.from(loanUseCase.returnAsset(
                 input.loanId(), input.condition(), actorId));

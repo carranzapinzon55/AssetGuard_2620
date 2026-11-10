@@ -6,6 +6,7 @@ import { Boxes, Command, Moon, Search, Sun, UserRound } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import { ASSETS_QUERY, USERS_QUERY } from "@/lib/operations";
 import { errorMessage, queryGraphQL, type AssetItem, type UserItem } from "@/lib/workspace";
+import { useModalFocus } from "@/components/workspace/ui";
 
 type PaletteResult = { label: string; detail: string; href: string; kind: "Activo" | "Técnico" };
 
@@ -19,6 +20,7 @@ export function WorkspaceTools() {
   const [assets, setAssets] = useState<AssetItem[]>([]);
   const [technicians, setTechnicians] = useState<UserItem[]>([]);
   const [selected, setSelected] = useState(0);
+  const paletteRef = useModalFocus(open);
 
   useEffect(() => {
     const stored = localStorage.getItem("assetguard-theme");
@@ -104,7 +106,7 @@ export function WorkspaceTools() {
       <Moon size={16} className="dark:hidden" /><Sun size={16} className="hidden dark:block" />
     </button>
     {open && <div className="fixed inset-0 z-50 flex items-start justify-center bg-slate-950/45 px-4 pt-[12vh] backdrop-blur-sm dark:bg-black/65" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setOpen(false); }}>
-      <section className="w-full max-w-xl overflow-hidden rounded-lg border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900" role="dialog" aria-modal="true" aria-label="Búsqueda global">
+      <section ref={paletteRef} tabIndex={-1} className="w-full max-w-xl overflow-hidden rounded-lg border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900" role="dialog" aria-modal="true" aria-label="Búsqueda global">
         <div className="flex items-center gap-3 border-b border-slate-200 px-4 dark:border-slate-700">
           <Search size={18} className="shrink-0 text-slate-400" />
           <input autoFocus value={query} onChange={(event) => { setQuery(event.target.value); setSelected(0); }} onKeyDown={(event) => {

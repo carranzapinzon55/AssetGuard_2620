@@ -19,6 +19,7 @@ import {
 import { useEffect, type ReactNode } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { WorkspaceTools } from "@/components/workspace/workspace-tools";
+import { CorporateFooter } from "@/components/corporate-footer";
 import { landingPath } from "@/lib/auth";
 import { roleLabel } from "@/lib/localization";
 
@@ -105,6 +106,7 @@ export function ProtectedShell({ children }: { children: ReactNode }) {
           <div className="topbar-right"><WorkspaceTools /><span className="environment-pill"><span /> SISTEMA ACTIVO</span><span className="topbar-date">AssetGuard 2620</span></div>
         </header>
         <main className="page-content">{children}</main>
+        <CorporateFooter className="workspace-corporate-footer" />
       </div>
     </div>
   );

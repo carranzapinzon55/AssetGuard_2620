@@ -114,6 +114,12 @@ public class LoanUseCase {
         return returnAssetInternal(loanId, condition, null);
     }
 
+    @Transactional
+    public Loan returnAssetAsAdmin(Long loanId, Loan.ReturnCondition condition, Long adminId) {
+        requireActiveUserWithRole(adminId, "ADMIN");
+        return returnAssetInternal(loanId, condition, null);
+    }
+
     private Loan returnAssetInternal(Long loanId, Loan.ReturnCondition condition, Long borrowerId) {
         if (condition == null) {
             throw new IllegalArgumentException("Return condition is required");

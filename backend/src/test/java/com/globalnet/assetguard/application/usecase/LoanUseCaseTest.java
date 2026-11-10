@@ -39,12 +39,14 @@ class LoanUseCaseTest {
 
     private User technician;
     private User inspector;
+    private User admin;
     private Asset availableAsset;
 
     @BeforeEach
     void setUp() {
         technician = User.builder().id(10L).role("TECHNICIAN").status(true).build();
         inspector = User.builder().id(20L).role("INSPECTOR").status(true).build();
+        admin = User.builder().id(30L).role("ADMIN").status(true).build();
         availableAsset = Asset.builder().id(30L).status("AVAILABLE").build();
     }
 
@@ -124,6 +126,25 @@ class LoanUseCaseTest {
         assertEquals(3, result.getDelayDays());
         assertEquals("UNDER_MAINTENANCE", availableAsset.getStatus());
         verify(assetRepositoryPort).save(availableAsset);
+    }
+
+    @Test
+    void adminCanRegisterReturn() {
+        Loan approvedLoan = Loan.builder()
+                .id(40L)
+                .status(Loan.Status.APPROVED)
+                .asset(Asset.builder().id(30L).build())
+                .build();
+        when(userRepositoryPort.findById(30L)).thenReturn(Optional.of(admin));
+        when(loanRepositoryPort.findById(40L)).thenReturn(Optional.of(approvedLoan));
+        when(assetRepositoryPort.findById(30L)).thenReturn(Optional.of(availableAsset));
+        when(assetRepositoryPort.save(any(Asset.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(loanRepositoryPort.save(any(Loan.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Loan result = loanUseCase.returnAssetAsAdmin(40L, Loan.ReturnCondition.GOOD, 30L);
+
+        assertEquals(Loan.Status.RETURNED, result.getStatus());
+        assertEquals(Loan.ReturnCondition.GOOD, result.getReturnCondition());
     }
 
     private Loan pendingLoan() {

@@ -6,6 +6,7 @@ import { ArrowRight, Eye, EyeOff, KeyRound, LoaderCircle, LockKeyhole, Mail, Pac
 import { landingPath, type UserRole } from "@/lib/auth";
 import { createGraphQLClient, LOGIN_MUTATION } from "@/lib/graphql";
 import { useAuth } from "@/components/auth-provider";
+import { CorporateFooter } from "@/components/corporate-footer";
 
 type LoginResponse = {
   login: {
@@ -141,7 +142,7 @@ export function LoginForm() {
           </form>
           <div className="login-card-footer"><span><span className="small-status-dot" /> ACCESO MONITORIZADO</span><span>¿Problemas de acceso? Contacta con soporte</span></div>
         </div>
-        <footer className="login-main-footer"><span>© 2026 GLOBALNET</span><span>ASSETGUARD <b>·</b> 2620</span></footer>
+        <CorporateFooter className="login-corporate-footer" />
       </section>
     </main>
   );

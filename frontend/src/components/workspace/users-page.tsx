@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useSearchParams } from "next/navigation";
 import { Edit3, Plus, Search, UserRound, X } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
-import { Button, DataTable, EmptyState, Feedback, FormField, LoadingRows, PageTitle, SelectInput, StatusTag, TextInput } from "@/components/workspace/ui";
+import { Button, DataTable, EmptyState, Feedback, FormField, LoadingRows, PageTitle, SelectInput, StatusTag, TextInput, useEscapeKey, useModalFocus } from "@/components/workspace/ui";
 import { CREATE_USER, UPDATE_USER, USERS_QUERY } from "@/lib/operations";
 import { roleLabel } from "@/lib/localization";
 import { errorMessage, queryGraphQL, type UserItem } from "@/lib/workspace";
@@ -26,6 +26,14 @@ export function UsersPage() {
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState<{ error?: string; success?: string }>({});
   const [refresh, setRefresh] = useState(0);
+  const [confirmDeactivation, setConfirmDeactivation] = useState(false);
+  const userDialogRef = useModalFocus(formOpen);
+  const deactivationDialogRef = useModalFocus(confirmDeactivation);
+
+  useEscapeKey(confirmDeactivation || formOpen, () => {
+    if (confirmDeactivation) setConfirmDeactivation(false);
+    else setFormOpen(false);
+  });
 
   useEffect(() => {
     let active = true;
@@ -56,8 +64,7 @@ export function UsersPage() {
     setFeedback({});
   }
 
-  async function saveUser(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function persistUser() {
     setSaving(true);
     setFeedback({});
     try {
@@ -79,6 +86,15 @@ export function UsersPage() {
     }
   }
 
+  function saveUser(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (editing?.status && !form.status) {
+      setConfirmDeactivation(true);
+      return;
+    }
+    void persistUser();
+  }
+
   return (
     <div className="work-page">
       <PageTitle eyebrow="ADMINISTRACIÓN · CUENTAS" title="Usuarios" description="Administra identidades, permisos y estado de acceso." action={<Button onClick={startCreate}><Plus size={16} /> Crear usuario</Button>} />
@@ -93,34 +109,20 @@ export function UsersPage() {
             {filtered.map((user) => <tr key={user.id}>
               <td><span className="table-primary">{user.fullName || "Sin nombre"}</span><small className="table-secondary">ID {user.id}</small></td>
               <td>{user.email}</td><td><span className="role-label">{roleLabel(user.role)}</span></td><td><StatusTag value={user.status ? "ACTIVE" : "INACTIVE"} /></td>
-              <td><button className="table-action" type="button" onClick={() => startEdit(user)} aria-label={`Editar ${user.email}`} title="Editar usuario"><Edit3 size={15} /></button></td>
+              <td><button className="table-action" type="button" onClick={() => startEdit(user)} aria-label={`Editar usuario ${user.email}`} title={`Editar usuario ${user.email}`}><Edit3 size={15} /></button></td>
             </tr>)}
           </DataTable>
         )}
       </section>
 
-      {formOpen && <div className="modal-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setFormOpen(false); }}>
-        {/* Contenedor del modal con dimensiones propias, independiente de la tabla */}
-        <section 
-          className="bg-white rounded-xl shadow-2xl flex flex-col overflow-hidden" 
-          style={{ width: '520px', maxWidth: '95vw', maxHeight: '85vh' }}
-          role="dialog" 
-          aria-modal="true" 
-          aria-labelledby="user-form-title"
-        >
-          {/* Encabezado original restaurado y fijo */}
-          <div className="modal-heading flex-shrink-0 flex items-center justify-between px-6 py-4 border-b border-gray-100">
-            <div>
-              <p className="work-eyebrow text-xs font-semibold text-gray-500">ADMINISTRACIÓN</p>
-              <h2 id="user-form-title" className="text-lg font-bold text-gray-900">{editing ? "Editar usuario" : "Nueva cuenta"}</h2>
-            </div>
-            <button className="table-action p-1 rounded-lg hover:bg-gray-100" type="button" onClick={() => setFormOpen(false)} aria-label="Cerrar formulario">
-              <X size={18} />
-            </button>
+      {formOpen && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setFormOpen(false); }}>
+        <section ref={userDialogRef} tabIndex={-1} className="work-modal user-form-modal" role="dialog" aria-modal="true" aria-labelledby="user-form-title">
+          <div className="modal-heading">
+            <div><p className="work-eyebrow">ADMINISTRACIÓN</p><h2 id="user-form-title">{editing ? "Editar usuario" : "Nueva cuenta"}</h2></div>
+            <button className="table-action" type="button" onClick={() => setFormOpen(false)} aria-label="Cerrar formulario"><X size={18} /></button>
           </div>
 
-          {/* Formulario con scroll interno para que los botones de acción nunca se oculten */}
-          <form className="work-form flex-1 overflow-y-auto p-6 space-y-4" onSubmit={saveUser}>
+          <form className="work-form user-form" onSubmit={saveUser}>
             <FormField label="Nombre completo">
               <TextInput value={form.fullName} onChange={(event) => setForm({ ...form, fullName: event.target.value })} required autoComplete="name" />
             </FormField>
@@ -130,7 +132,7 @@ export function UsersPage() {
             <FormField label={editing ? "Nueva contraseña (opcional)" : "Contraseña inicial"}>
               <TextInput type="password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} required={!editing} autoComplete="new-password" />
             </FormField>
-            <div className="form-grid two-col grid grid-cols-2 gap-3">
+            <div className="form-grid two-col">
               <FormField label="Rol">
                 <SelectInput value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value as UserItem["role"] })}>
                   <option value="ADMIN">Director de Logística</option>
@@ -146,13 +148,18 @@ export function UsersPage() {
               </FormField>
             </div>
             <Feedback error={feedback.error} />
-            <div className="modal-actions pt-4 mt-2 border-t border-gray-100 flex items-center justify-end gap-3 flex-shrink-0">
+            <div className="modal-actions">
               <Button variant="secondary" type="button" onClick={() => setFormOpen(false)}>Cancelar</Button>
               <Button type="submit" loading={saving}>{editing ? "Guardar cambios" : "Crear cuenta"}</Button>
             </div>
           </form>
         </section>
       </div>}
+      {confirmDeactivation && <div className="modal-backdrop" role="presentation"><section ref={deactivationDialogRef} tabIndex={-1} className="work-modal" role="alertdialog" aria-modal="true" aria-labelledby="deactivation-title" aria-describedby="deactivation-description">
+        <div className="modal-heading"><div><p className="work-eyebrow">ADMINISTRACIÓN · CUENTAS</p><h2 id="deactivation-title">Confirmar desactivación</h2></div></div>
+        <p id="deactivation-description" className="legal-notice-copy">La cuenta de {editing?.email} dejará de tener acceso a AssetGuard. ¿Deseas continuar?</p>
+        <div className="modal-actions"><Button variant="secondary" type="button" onClick={() => setConfirmDeactivation(false)}>Cancelar</Button><Button variant="danger" type="button" loading={saving} onClick={() => { setConfirmDeactivation(false); void persistUser(); }}>Confirmar desactivación</Button></div>
+      </section></div>}
     </div>
   );
 }

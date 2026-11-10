@@ -340,7 +340,7 @@ body {
   background-clip: text;
   color: transparent;
 }
-.work-page-heading > div > p:last-child, .page-subtitle { color: #a7b3c4; }
+.work-page-heading > div > p:last-child, .page-subtitle { color: #94a3b8; }
 .work-eyebrow { color: #94a3b8; }
 .work-section, .metric-panel, .dashboard-detail-band, .dashboard-footer-note, .module-empty-state {
   border: 1px solid var(--workspace-outline, rgb(51 65 85 / 78%));
@@ -581,6 +581,58 @@ body {
 
 html.dark { color-scheme: dark; }
 
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[role="dialog"]:focus-visible,
+[role="alertdialog"]:focus-visible {
+  outline: 2px solid #34d399;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px #020617;
+}
+
+.corporate-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 20px;
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.5;
+}
+.corporate-footer p { margin: 0; }
+.corporate-footer nav { display: flex; flex-wrap: wrap; gap: 8px 18px; }
+.corporate-footer nav button {
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: inherit;
+  text-align: left;
+  text-decoration: underline;
+  text-decoration-color: currentColor;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.login-corporate-footer {
+  flex-direction: column;
+  justify-content: center;
+  margin-top: 20px;
+  color: #94a3b8;
+  text-align: center;
+}
+.login-corporate-footer nav { justify-content: center; }
+.workspace-corporate-footer {
+  padding: 13px 42px 18px;
+  border-top: 1px solid #e2e8f0;
+}
+html.dark .workspace-corporate-footer { border-color: #334155; color: #94a3b8; }
+html.dark .corporate-footer nav button:hover { color: #e2e8f0; }
+.corporate-footer nav button:hover { color: #0f766e; }
+
 @media (max-width: 680px) {
   .nav-active-indicator {
     top: auto;
@@ -601,4 +653,6 @@ html.dark { color-scheme: dark; }
   .login-main { min-height: 510px; padding: 22px 18px 20px; }
   .login-card-wrap.login-card-surface { width: 100%; padding: 25px 21px; }
   .login-card-heading h2 { font-size: 28px; }
+  .workspace-corporate-footer { justify-content: center; padding: 13px 17px 18px; text-align: center; }
+  .workspace-corporate-footer nav { justify-content: center; }
 }
