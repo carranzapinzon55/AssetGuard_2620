@@ -3,11 +3,14 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { ChevronLeft, ChevronRight, Download, Filter, RotateCcw, ShieldCheck } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
+import { AUDIT_TECHNICIANS_QUERY, USERS_QUERY } from "@/lib/operations";
 import { Button, DataTable, EmptyState, Feedback, FormField, LoadingRows, PageTitle, SelectInput, StatusTag, TextInput } from "@/components/workspace/ui";
 import { AUDIT_QUERY } from "@/lib/operations";
-import { errorMessage, queryGraphQL, type LoanItem } from "@/lib/workspace";
+import { errorMessage, queryGraphQL, type LoanItem, type UserItem } from "@/lib/workspace";
 
 type AuditResult = { auditLogs: { loans: LoanItem[]; totalElements: number; page: number; limit: number; totalPages: number } };
+type AuditTechnicianLoans = { loans: Array<{ user: (UserItem & { role: string }) | null }> };
+type UsersResult = { users: UserItem[] };
 
 function csvField(value: string) {
   const safeValue = /^[=+\-@]/.test(value) ? `'${value}` : value;
@@ -16,6 +19,7 @@ function csvField(value: string) {
 
 export function AuditPage() {
   const { session } = useAuth();
+  const [technicians, setTechnicians] = useState<UserItem[]>([]);
   const [filters, setFilters] = useState({ serialNumber: "", technicianId: "", startDate: "", endDate: "", status: "" });
   const [applied, setApplied] = useState(filters);
   const [page, setPage] = useState(0);
@@ -23,12 +27,33 @@ export function AuditPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const limit = 20;
+  const today = new Date().toISOString().slice(0, 10);
+
+  useEffect(() => {
+    if (!session) return;
+    let active = true;
+    const request = session.user.role === "ADMIN"
+      ? queryGraphQL<UsersResult>(USERS_QUERY).then((result) => result.users)
+      : queryGraphQL<AuditTechnicianLoans>(AUDIT_TECHNICIANS_QUERY).then(({ loans }) => {
+          const uniqueUsers = new Map<string, UserItem>();
+          loans.forEach(({ user }) => {
+            if (user?.role === "TECHNICIAN" && user.status) uniqueUsers.set(user.id, user);
+          });
+          return [...uniqueUsers.values()];
+        });
+    request.then((users) => {
+      if (active) setTechnicians(users.filter((user) => user.role === "TECHNICIAN" && user.status));
+    }).catch((requestError: unknown) => {
+      if (active) setError(errorMessage(requestError));
+    });
+    return () => { active = false; };
+  }, [session]);
 
   useEffect(() => {
     let active = true;
     queryGraphQL<AuditResult>(AUDIT_QUERY, {
       serialNumber: applied.serialNumber.trim() || null,
-      technicianId: applied.technicianId.trim() || null,
+      technicianId: applied.technicianId || null,
       startDate: applied.startDate || null,
       endDate: applied.endDate || null,
       status: applied.status || null,
@@ -80,9 +105,9 @@ export function AuditPage() {
       <section className="work-section">
         <form className="audit-filter-grid" onSubmit={applyFilters}>
           <FormField label="Número de serie"><TextInput value={filters.serialNumber} onChange={(event) => setFilters({ ...filters, serialNumber: event.target.value })} placeholder="AG-0000" /></FormField>
-          <FormField label="ID de técnico"><TextInput inputMode="numeric" value={filters.technicianId} onChange={(event) => setFilters({ ...filters, technicianId: event.target.value })} placeholder="Cualquier técnico" /></FormField>
-          <FormField label="Desde"><TextInput type="date" value={filters.startDate} onChange={(event) => setFilters({ ...filters, startDate: event.target.value })} /></FormField>
-          <FormField label="Hasta"><TextInput type="date" value={filters.endDate} onChange={(event) => setFilters({ ...filters, endDate: event.target.value })} /></FormField>
+          <FormField label="Técnico"><SelectInput value={filters.technicianId} onChange={(event) => setFilters({ ...filters, technicianId: event.target.value })}><option value="">Todos los técnicos</option>{technicians.map((technician) => <option key={technician.id} value={technician.id}>{technician.fullName || technician.email}</option>)}</SelectInput></FormField>
+          <FormField label="Desde"><TextInput type="date" max={today} value={filters.startDate} onChange={(event) => setFilters({ ...filters, startDate: event.target.value })} /></FormField>
+          <FormField label="Hasta"><TextInput type="date" min={today} value={filters.endDate} onChange={(event) => setFilters({ ...filters, endDate: event.target.value })} /></FormField>
           <FormField label="Estado"><SelectInput value={filters.status} onChange={(event) => setFilters({ ...filters, status: event.target.value })}><option value="">Todos</option><option value="PENDING">Pendiente</option><option value="APPROVED">Aprobado</option><option value="REJECTED">Rechazado</option><option value="RETURNED">Devuelto</option></SelectInput></FormField>
           <div className="filter-actions"><Button type="submit"><Filter size={15} /> Aplicar</Button><Button type="button" variant="quiet" onClick={resetFilters}><RotateCcw size={15} /> Limpiar</Button></div>
         </form>

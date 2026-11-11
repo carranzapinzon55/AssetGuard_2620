@@ -18,6 +18,7 @@ import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 @Repository
 public class LoanPersistenceAdapter implements LoanRepositoryPort {
@@ -68,6 +69,7 @@ public class LoanPersistenceAdapter implements LoanRepositoryPort {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public LoanAuditPage searchAudit(
             String serialNumber,
             Long technicianId,
@@ -95,7 +97,6 @@ public class LoanPersistenceAdapter implements LoanRepositoryPort {
             results.getNumber(),
             results.getSize());
     }
-
     @Override
     public LoanDashboardMetrics calculateDashboardMetrics() {
         return calculateDashboardMetrics(null, null);

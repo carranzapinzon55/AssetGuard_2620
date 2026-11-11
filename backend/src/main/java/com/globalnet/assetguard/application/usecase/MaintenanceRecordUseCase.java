@@ -15,12 +15,15 @@ public class MaintenanceRecordUseCase {
 
     private final MaintenanceRecordRepositoryPort maintenanceRecordRepositoryPort;
     private final AssetRepositoryPort assetRepositoryPort;
+    private final AuditLogUseCase auditLogUseCase;
 
     public MaintenanceRecordUseCase(
             MaintenanceRecordRepositoryPort maintenanceRecordRepositoryPort,
-            AssetRepositoryPort assetRepositoryPort) {
+            AssetRepositoryPort assetRepositoryPort,
+            AuditLogUseCase auditLogUseCase) {
         this.maintenanceRecordRepositoryPort = maintenanceRecordRepositoryPort;
         this.assetRepositoryPort = assetRepositoryPort;
+        this.auditLogUseCase = auditLogUseCase;
     }
 
     @Transactional
@@ -43,10 +46,18 @@ public class MaintenanceRecordUseCase {
             throw new IllegalStateException("Asset is already under maintenance");
         }
         maintenanceRecord.setAsset(asset);
+        String previousStatus = asset.getStatus();
         asset.setStatus("UNDER_MAINTENANCE");
         assetRepositoryPort.save(asset);
 
-        return maintenanceRecordRepositoryPort.save(maintenanceRecord);
+        MaintenanceRecord savedRecord = maintenanceRecordRepositoryPort.save(maintenanceRecord);
+        auditLogUseCase.record("MAINTENANCE_OPENED", "MAINTENANCE", savedRecord.getId(),
+            "Intervención abierta para el activo " + assetId);
+        if (!"UNDER_MAINTENANCE".equals(previousStatus)) {
+            auditLogUseCase.record("ASSET_STATUS_CHANGED", "ASSET", asset.getId(),
+                previousStatus + " -> UNDER_MAINTENANCE");
+        }
+        return savedRecord;
     }
 
     public List<MaintenanceRecord> findAll() {
@@ -72,6 +83,11 @@ public class MaintenanceRecordUseCase {
         asset.setStatus("AVAILABLE");
         assetRepositoryPort.save(asset);
         record.setAsset(asset);
-        return maintenanceRecordRepositoryPort.save(record);
+        MaintenanceRecord savedRecord = maintenanceRecordRepositoryPort.save(record);
+        auditLogUseCase.record("MAINTENANCE_COMPLETED", "MAINTENANCE", savedRecord.getId(),
+            "Intervención cerrada para el activo " + asset.getId());
+        auditLogUseCase.record("ASSET_STATUS_CHANGED", "ASSET", asset.getId(),
+            "UNDER_MAINTENANCE -> AVAILABLE");
+        return savedRecord;
     }
 }

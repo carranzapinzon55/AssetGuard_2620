@@ -2,7 +2,8 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Eye, EyeOff, KeyRound, LoaderCircle, LockKeyhole, Mail, PackageCheck, ShieldCheck } from "lucide-react";
+import Image from "next/image";
+import { ArrowRight, Eye, EyeOff, KeyRound, LoaderCircle, LockKeyhole, Mail, ShieldCheck } from "lucide-react";
 import { landingPath, type UserRole } from "@/lib/auth";
 import { createGraphQLClient, LOGIN_MUTATION } from "@/lib/graphql";
 import { useAuth } from "@/components/auth-provider";
@@ -105,8 +106,8 @@ export function LoginForm() {
       <section className="login-aside" aria-label="AssetGuard">
         <div className="login-aside-top">
           <div className="brand-lockup login-brand">
-            <span className="brand-symbol"><PackageCheck size={20} strokeWidth={2.2} /></span>
-            <span className="brand-name">Asset<span>Guard</span></span>
+            <Image className="brand-logo brand-logo-light" src="/AssetGuard_2620_logo_transparente_claro.png" alt="AssetGuard 2620" width={220} height={220} priority />
+            <Image className="brand-logo brand-logo-dark" src="/AssetGuard_2620_logo_transparente_oscuro.png" alt="" width={220} height={220} aria-hidden="true" priority />
           </div>
           <span className="edition-label">CONTROL DE ACTIVOS <i>·</i> 2620</span>
         </div>

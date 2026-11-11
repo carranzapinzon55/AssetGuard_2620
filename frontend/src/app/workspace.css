@@ -153,6 +153,14 @@
 .workspace-tool-button:hover { border-color: #9ab4a0; background: #f3f7f2; color: #285947; }
 .workspace-tool-button kbd { display: inline-flex; align-items: center; gap: 2px; padding: 2px 4px; border: 1px solid #e4e9e3; border-radius: 3px; color: #87938a; font-size: 8px; }
 .theme-toggle { width: 31px; padding: 0; }
+.currency-switch { display: inline-flex; flex: 0 0 auto; overflow: hidden; border: 1px solid #d5ded6; border-radius: 5px; background: #fff; }
+.currency-switch button { min-width: 35px; height: 29px; padding: 0 7px; border: 0; background: transparent; color: #718078; font-size: 9px; font-weight: 720; cursor: pointer; }
+.currency-switch button + button { border-left: 1px solid #e3e9e3; }
+.currency-switch button[aria-pressed="true"] { background: #e9f4ed; color: #176345; }
+.money-entry { display: flex; min-width: 0; gap: 6px; }
+.money-entry > .work-input { flex: 1; }
+.currency-entry-select { width: 76px; flex: 0 0 auto; }
+.currency-entry-label { display: grid; min-width: 52px; place-items: center; padding: 0 9px; border: 1px solid #dfe5df; border-radius: 5px; background: #f5f7f4; color: #59695e; font-size: 10px; font-weight: 720; }
 .audit-export-actions { display: flex; align-items: center; gap: 12px; }
 .overdue-badge { margin: 4px 0 0; }
 .upload-progress { margin: 0 16px 14px; padding: 11px 12px; border: 1px solid #dfe8de; border-radius: 5px; background: #f8fbf7; color: #53665a; }
@@ -164,6 +172,25 @@
 .upload-progress.complete { border-color: #d3e6d5; background: #f2f8f1; }
 .upload-progress > small { display: block; margin-top: 7px; color: #7d8b81; font-size: 8px; }
 @keyframes upload-sweep { from { transform: translateX(0); } to { transform: translateX(185%); } }
+
+/* Forzar que el modal de búsqueda flote en toda la pantalla sin desplazar el contenido */
+.topbar {
+  backdrop-filter: none !important;
+}
+
+div[role="presentation"]:has(section[aria-label="Búsqueda global"]) {
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  margin: 0 !important;
+  padding-top: 12vh !important;
+  z-index: 99999 !important;
+  display: flex !important;
+  align-items: flex-start !important;
+  justify-content: center !important;
+  background-color: rgba(2, 6, 23, 0.5) !important;
+}
 
 html.dark body { background: var(--paper); color: var(--ink); }
 html.dark .workspace {
@@ -199,6 +226,11 @@ html.dark .nav-link.active { background: #173a35; color: #b6e2c6; }
 html.dark .work-input, html.dark .search-control,
 html.dark .workspace-tool-button, html.dark .secondary-button { border-color: #344452; background: #111b25; color: #d5dfe6; }
 html.dark .search-control input, html.dark .work-input { color: #d5dfe6; }
+html.dark .currency-switch { border-color: #344452; background: #111b25; }
+html.dark .currency-switch button { color: #aab8c3; }
+html.dark .currency-switch button + button { border-color: #344452; }
+html.dark .currency-switch button[aria-pressed="true"] { background: #173a35; color: #b6e2c6; }
+html.dark .currency-entry-label { border-color: #344452; background: #1b2833; color: #d5dfe6; }
 html.dark .upload-dropzone, html.dark .selected-file,
 html.dark .upload-progress { border-color: #35483f; background: #14231f; color: #b8c9bf; }
 html.dark .upload-dropzone strong, html.dark .selected-file strong { color: #d4e0d7; }
@@ -224,6 +256,7 @@ html.dark .legal-notice-copy { color: #cbd5e1; }
   .topbar-right { gap: 7px; }
   .workspace-tool-button > span, .workspace-tool-button kbd, .environment-pill { display: none; }
   .workspace-tool-button { width: 30px; padding: 0; }
+  .currency-switch button { min-width: 31px; padding: 0 5px; font-size: 8px; }
   .audit-export-actions { width: 100%; justify-content: space-between; }
   .work-page-heading { align-items: flex-start; flex-direction: column; margin-bottom: 24px; }
   .work-page-heading h1 { font-size: 25px; }
@@ -264,9 +297,8 @@ html:not(.dark) .workspace {
 html:not(.dark) .sidebar,
 html:not(.dark) .topbar {
   border-color: rgb(226 232 240 / 80%);
-  background: rgb(255 255 255 / 90%);
+  background: #ffffff;
   color: #1e293b;
-  backdrop-filter: blur(12px);
 }
 
 html:not(.dark) .sidebar { box-shadow: 8px 0 24px rgb(15 23 42 / 4%); }
@@ -315,6 +347,8 @@ html:not(.dark) .workspace-tool-button:hover {
   box-shadow: 0 2px 6px rgb(15 23 42 / 8%);
 }
 html:not(.dark) .workspace-tool-button kbd { border-color: #e2e8f0; color: #64748b; }
+html:not(.dark) .currency-switch { border-color: #cbd5e1; background: #fff; }
+html:not(.dark) .currency-switch button[aria-pressed="true"] { background: #ecfdf5; color: #065f46; }
 html:not(.dark) .work-page-heading h1,
 html:not(.dark) .page-heading h1 {
   background: none;

@@ -56,6 +56,7 @@ class BulkUploadAssetsUseCaseIntegrationTest {
 
     @BeforeEach
     void clearAssets() {
+                jdbcTemplate.update("delete from audit_logs");
         jdbcTemplate.update("delete from loans");
         jdbcTemplate.update("delete from maintenance_records");
         jdbcTemplate.update("delete from assets");
@@ -77,17 +78,19 @@ class BulkUploadAssetsUseCaseIntegrationTest {
     }
 
     @Test
-    void rejectsDuplicateSerialWithinTheSameUploadBeforePersisting() {
+    void ignoresClientSerialsAndGeneratesDistinctSerialsForEachUploadedAsset() throws Exception {
         String csv = "serialNumber,model,estimatedValue,purchaseDate\n"
                 + "DUPLICATE-1,Camera,120,2026-03-15\n"
                 + "DUPLICATE-1,Laptop,900,2026-03-16\n";
 
-        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
-                () -> bulkUploadAssetsUseCase.execute("assets.csv", csv.getBytes(StandardCharsets.UTF_8)));
+        var assets = bulkUploadAssetsUseCase.execute("assets.csv", csv.getBytes(StandardCharsets.UTF_8));
 
-        assertEquals("Error en la fila 3: El serial DUPLICATE-1 está duplicado en el archivo",
-                exception.getMessage());
-        assertEquals(0, assetRepositoryPort.findAll().size());
+        assertEquals(2, assets.size());
+        assertEquals(2, assets.stream().map(asset -> asset.getSerialNumber()).distinct().count());
+        org.junit.jupiter.api.Assertions.assertTrue(assets.stream()
+                .noneMatch(asset -> "DUPLICATE-1".equals(asset.getSerialNumber())));
+        assertEquals(2, jdbcTemplate.queryForObject(
+                "select count(*) from audit_logs where event_type = 'ASSET_CREATED'", Integer.class));
     }
 
     @Test

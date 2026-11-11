@@ -20,6 +20,7 @@ export function UsersPage() {
   const [users, setUsers] = useState<UserItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState(() => searchParams.get("search") ?? "");
+  const [roleFilter, setRoleFilter] = useState<UserItem["role"] | "ALL">("ALL");
   const [editing, setEditing] = useState<UserItem | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [formOpen, setFormOpen] = useState(false);
@@ -27,11 +28,14 @@ export function UsersPage() {
   const [feedback, setFeedback] = useState<{ error?: string; success?: string }>({});
   const [refresh, setRefresh] = useState(0);
   const [confirmDeactivation, setConfirmDeactivation] = useState(false);
+  const [confirmChanges, setConfirmChanges] = useState(false);
   const userDialogRef = useModalFocus(formOpen);
   const deactivationDialogRef = useModalFocus(confirmDeactivation);
+  const changesDialogRef = useModalFocus(confirmChanges);
 
-  useEscapeKey(confirmDeactivation || formOpen, () => {
+  useEscapeKey(confirmDeactivation || confirmChanges || formOpen, () => {
     if (confirmDeactivation) setConfirmDeactivation(false);
+    else if (confirmChanges) setConfirmChanges(false);
     else setFormOpen(false);
   });
 
@@ -46,9 +50,12 @@ export function UsersPage() {
 
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
-    if (!query) return users;
-    return users.filter((user) => `${user.fullName ?? ""} ${user.email} ${user.role}`.toLowerCase().includes(query));
-  }, [users, search]);
+    return users.filter((user) => {
+      const matchesSearch = `${user.fullName ?? ""} ${user.email} ${user.role}`.toLowerCase().includes(query);
+      const matchesRole = roleFilter === "ALL" || user.role === roleFilter;
+      return matchesSearch && matchesRole;
+    });
+  }, [users, search, roleFilter]);
 
   function startCreate() {
     setEditing(null);
@@ -88,11 +95,15 @@ export function UsersPage() {
 
   function saveUser(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!editing) {
+      void persistUser();
+      return;
+    }
     if (editing?.status && !form.status) {
       setConfirmDeactivation(true);
       return;
     }
-    void persistUser();
+    setConfirmChanges(true);
   }
 
   return (
@@ -102,7 +113,7 @@ export function UsersPage() {
       <section className="work-section">
         <div className="section-toolbar">
           <div className="toolbar-title"><UserRound size={17} /><strong>Directorio de usuarios</strong><span>{users.length}</span></div>
-          <label className="search-control"><Search size={16} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar por nombre, correo o rol" aria-label="Buscar usuarios" /></label>
+          <div className="toolbar-controls"><label className="search-control"><Search size={16} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar por nombre, correo o rol" aria-label="Buscar usuarios" /></label><SelectInput className="filter-select" value={roleFilter} onChange={(event) => setRoleFilter(event.target.value as typeof roleFilter)} aria-label="Filtrar usuarios por rol"><option value="ALL">Todos los roles</option><option value="ADMIN">ADMIN</option><option value="INSPECTOR">INSPECTOR</option><option value="TECHNICIAN">TECHNICIAN</option></SelectInput></div>
         </div>
         {loading ? <LoadingRows label="Cargando usuarios" /> : filtered.length === 0 ? <EmptyState title={users.length === 0 ? "No hay usuarios registrados" : "Sin coincidencias"} detail={users.length === 0 ? "No hay usuarios registrados en el sistema en este momento." : "No encontramos usuarios que coincidan con la búsqueda."} /> : (
           <DataTable headings={["Usuario", "Correo", "Rol", "Estado", "Acciones"]}>
@@ -134,11 +145,12 @@ export function UsersPage() {
             </FormField>
             <div className="form-grid two-col">
               <FormField label="Rol">
-                <SelectInput value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value as UserItem["role"] })}>
+                <SelectInput value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value as UserItem["role"] })} disabled={Boolean(editing)}>
                   <option value="ADMIN">Director de Logística</option>
                   <option value="INSPECTOR">Encargado de Bodega</option>
                   <option value="TECHNICIAN">Técnico de Campo</option>
                 </SelectInput>
+                {editing && <small className="form-hint">El rol no es modificable</small>}
               </FormField>
               <FormField label="Estado">
                 <SelectInput value={form.status ? "active" : "inactive"} onChange={(event) => setForm({ ...form, status: event.target.value === "active" })}>
@@ -159,6 +171,11 @@ export function UsersPage() {
         <div className="modal-heading"><div><p className="work-eyebrow">ADMINISTRACIÓN · CUENTAS</p><h2 id="deactivation-title">Confirmar desactivación</h2></div></div>
         <p id="deactivation-description" className="legal-notice-copy">La cuenta de {editing?.email} dejará de tener acceso a AssetGuard. ¿Deseas continuar?</p>
         <div className="modal-actions"><Button variant="secondary" type="button" onClick={() => setConfirmDeactivation(false)}>Cancelar</Button><Button variant="danger" type="button" loading={saving} onClick={() => { setConfirmDeactivation(false); void persistUser(); }}>Confirmar desactivación</Button></div>
+      </section></div>}
+      {confirmChanges && <div className="modal-backdrop confirmation-backdrop" role="presentation"><section ref={changesDialogRef} tabIndex={-1} className="work-modal" role="alertdialog" aria-modal="true" aria-labelledby="user-confirm-title" aria-describedby="user-confirm-description">
+        <div className="modal-heading"><div><p className="work-eyebrow">ADMINISTRACIÓN · CUENTAS</p><h2 id="user-confirm-title">Confirmar cambios</h2></div></div>
+        <p id="user-confirm-description" className="legal-notice-copy">¿Deseas guardar los cambios realizados en la cuenta de {editing?.email}?</p>
+        <div className="modal-actions"><Button variant="secondary" type="button" onClick={() => setConfirmChanges(false)}>Volver a editar</Button><Button type="button" loading={saving} onClick={() => { setConfirmChanges(false); void persistUser(); }}>Guardar cambios</Button></div>
       </section></div>}
     </div>
   );

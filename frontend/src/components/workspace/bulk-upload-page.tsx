@@ -3,6 +3,7 @@
 import { useState, type ChangeEvent } from "react";
 import { CheckCircle2, FileSpreadsheet, FileUp, FileWarning, X } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
+import { useCurrency } from "@/components/currency-provider";
 import { Button, DataTable, Feedback, PageTitle, StatusTag } from "@/components/workspace/ui";
 import { UPLOAD_ASSETS } from "@/lib/operations";
 import { errorMessage, queryGraphQL, type AssetItem } from "@/lib/workspace";
@@ -27,6 +28,7 @@ function fileToBase64(file: File, onProgress: (progress: number) => void) {
 
 export function BulkUploadPage() {
   const { session } = useAuth();
+  const { formatMoney } = useCurrency();
   const [file, setFile] = useState<File | null>(null);
   const [dragging, setDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -80,7 +82,7 @@ export function BulkUploadPage() {
           <span className="upload-filetypes"><span>CSV</span><span>XLSX</span></span>
         </label>
         {file && <div className="selected-file"><FileSpreadsheet size={18} /><div><strong>{file.name}</strong><small>{(file.size / 1024).toFixed(1)} KB</small></div><button className="table-action" type="button" onClick={() => setFile(null)} aria-label="Quitar archivo"><X size={15} /></button></div>}
-        <div className="upload-columns"><div><p className="work-eyebrow">COLUMNAS REQUERIDAS</p><p>Número de serie (<code>serialNumber</code>), modelo (<code>model</code>), valor estimado (<code>estimatedValue</code>) y fecha de compra (<code>purchaseDate</code>).</p></div><div><p className="work-eyebrow">VALIDACIÓN</p><p>Número de serie único, importe positivo y fecha válida. El estado inicial será &quot;Disponible&quot;.</p></div></div>
+        <div className="upload-columns"><div><p className="work-eyebrow">COLUMNAS REQUERIDAS</p><p>Modelo (<code>model</code>), valor estimado (<code>estimatedValue</code>) y fecha de compra (<code>purchaseDate</code>). El número de serie es opcional; se genera al importar.</p></div><div><p className="work-eyebrow">VALIDACIÓN</p><p>Los importes del archivo se interpretan en USD. Se requiere un valor positivo y una fecha válida; el estado inicial será &quot;Disponible&quot;.</p></div></div>
         {uploadStage && <div className={`upload-progress ${uploadStage === "complete" ? "complete" : ""}`} role="status" aria-live="polite">
           <div className="upload-progress-copy"><span>{uploadStage === "reading" ? "Preparando archivo" : uploadStage === "sending" ? "Validando e importando lote" : "Importación completada"}</span><strong>{uploadStage === "reading" ? `${readProgress}%` : uploadStage === "complete" ? "100%" : ""}</strong></div>
           <div className="upload-progress-track" role="progressbar" aria-label="Progreso de carga" aria-valuemin={0} aria-valuemax={100} aria-valuenow={uploadStage === "complete" ? 100 : uploadStage === "reading" ? readProgress : undefined}>
@@ -90,7 +92,7 @@ export function BulkUploadPage() {
         </div>}
         <div className="upload-actions"><span><FileWarning size={15} /> Si una fila falla, se revierte el lote completo.</span><Button onClick={upload} loading={uploading} disabled={!file}>{uploading ? "Procesando archivo" : "Importar activos"}</Button></div>
       </section>
-      {result && <section className="work-section results-section"><div className="section-toolbar"><div className="toolbar-title"><CheckCircle2 size={17} /><strong>Activos importados</strong><span>{result.importedCount}</span></div></div><DataTable headings={["Número de serie", "Modelo", "Valor estimado", "Fecha de compra", "Estado"]}>{result.assets.map((asset) => <tr key={asset.id}><td className="mono-cell">{asset.serialNumber}</td><td>{asset.model}</td><td>{asset.estimatedValue}</td><td>{asset.purchaseDate}</td><td><StatusTag value={asset.status} /></td></tr>)}</DataTable></section>}
+      {result && <section className="work-section results-section"><div className="section-toolbar"><div className="toolbar-title"><CheckCircle2 size={17} /><strong>Activos importados</strong><span>{result.importedCount}</span></div></div><DataTable headings={["Número de serie", "Modelo", "Valor estimado", "Fecha de compra", "Estado"]}>{result.assets.map((asset) => <tr key={asset.id}><td className="mono-cell">{asset.serialNumber}</td><td>{asset.model}</td><td>{asset.estimatedValue == null ? "—" : formatMoney(asset.estimatedValue)}</td><td>{asset.purchaseDate}</td><td><StatusTag value={asset.status} /></td></tr>)}</DataTable></section>}
     </div>
   );
 }

@@ -33,7 +33,7 @@ import org.springframework.stereotype.Component;
 public class ExcelCsvAssetImporter implements AssetFileImporterPort {
 
     private static final List<String> REQUIRED_HEADERS =
-            List.of("serialnumber", "model", "estimatedvalue", "purchasedate");
+            List.of("model", "estimatedvalue", "purchasedate");
     private static final List<DateTimeFormatter> DATE_FORMATS = List.of(
             DateTimeFormatter.ISO_LOCAL_DATE,
             DateTimeFormatter.ofPattern("M/d/uuuu", Locale.ROOT),
@@ -157,7 +157,9 @@ public class ExcelCsvAssetImporter implements AssetFileImporterPort {
             DataFormatter formatter,
             FormulaEvaluator evaluator) {
         try {
-            Cell serialCell = row.getCell(headers.get("serialnumber"));
+                Cell serialCell = headers.containsKey("serialnumber")
+                    ? row.getCell(headers.get("serialnumber"))
+                    : null;
             Cell modelCell = row.getCell(headers.get("model"));
             Cell valueCell = row.getCell(headers.get("estimatedvalue"));
             Cell dateCell = row.getCell(headers.get("purchasedate"));
@@ -276,7 +278,10 @@ public class ExcelCsvAssetImporter implements AssetFileImporterPort {
     }
 
     private String get(String[] values, Map<String, Integer> headers, String column) {
-        int index = headers.get(column);
+        Integer index = headers.get(column);
+        if (index == null) {
+            return null;
+        }
         return index < values.length ? values[index] : null;
     }
 

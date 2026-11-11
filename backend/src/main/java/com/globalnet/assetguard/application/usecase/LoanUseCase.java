@@ -4,9 +4,11 @@ import com.globalnet.assetguard.domain.model.Asset;
 import com.globalnet.assetguard.domain.model.Loan;
 import com.globalnet.assetguard.domain.model.LoanAuditPage;
 import com.globalnet.assetguard.domain.model.LoanDashboardMetrics;
+import com.globalnet.assetguard.domain.model.MaintenanceRecord;
 import com.globalnet.assetguard.domain.model.User;
 import com.globalnet.assetguard.domain.ports.output.AssetRepositoryPort;
 import com.globalnet.assetguard.domain.ports.output.LoanRepositoryPort;
+import com.globalnet.assetguard.domain.ports.output.MaintenanceRecordRepositoryPort;
 import com.globalnet.assetguard.domain.ports.output.UserRepositoryPort;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -15,6 +17,9 @@ import java.util.List;
 import java.util.NoSuchElementException;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.stereotype.Service;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
+import org.springframework.scheduling.annotation.Scheduled;
 
 @Service
 public class LoanUseCase {
@@ -22,14 +27,20 @@ public class LoanUseCase {
     private final LoanRepositoryPort loanRepositoryPort;
     private final AssetRepositoryPort assetRepositoryPort;
     private final UserRepositoryPort userRepositoryPort;
+    private final MaintenanceRecordRepositoryPort maintenanceRecordRepositoryPort;
+    private final AuditLogUseCase auditLogUseCase;
 
     public LoanUseCase(
             LoanRepositoryPort loanRepositoryPort,
             AssetRepositoryPort assetRepositoryPort,
-            UserRepositoryPort userRepositoryPort) {
+            UserRepositoryPort userRepositoryPort,
+            MaintenanceRecordRepositoryPort maintenanceRecordRepositoryPort,
+            AuditLogUseCase auditLogUseCase) {
         this.loanRepositoryPort = loanRepositoryPort;
         this.assetRepositoryPort = assetRepositoryPort;
         this.userRepositoryPort = userRepositoryPort;
+        this.maintenanceRecordRepositoryPort = maintenanceRecordRepositoryPort;
+        this.auditLogUseCase = auditLogUseCase;
     }
 
     @Transactional
@@ -42,7 +53,17 @@ public class LoanUseCase {
         }
 
         User user = requireActiveUserWithRole(userId, "TECHNICIAN");
-        if (loanRepositoryPort.hasOverdueApprovedLoan(userId, LocalDate.now())) {
+        LocalDate today = LocalDate.now();
+        List<Loan> overdueLoans = loanRepositoryPort.findByUserId(userId).stream()
+            .filter(loan -> loan.getStatus() == Loan.Status.APPROVED
+                && loan.getDueLocalDate() != null
+                && loan.getDueLocalDate().isBefore(today))
+            .toList();
+        for (Loan overdueLoan : overdueLoans) {
+            auditLogUseCase.recordOnce("LOAN_BECAME_OVERDUE", "LOAN", overdueLoan.getId(),
+                "Préstamo vencido desde " + overdueLoan.getDueLocalDate());
+        }
+        if (loanRepositoryPort.hasOverdueApprovedLoan(userId, today)) {
             throw new IllegalStateException("User has an overdue loan");
         }
 
@@ -59,7 +80,10 @@ public class LoanUseCase {
                 .status(Loan.Status.PENDING)
                 .delayDays(0)
                 .build();
-        return loanRepositoryPort.save(loan);
+        Loan savedLoan = loanRepositoryPort.save(loan);
+        auditLogUseCase.record("LOAN_REQUESTED", "LOAN", savedLoan.getId(),
+            "Solicitud de préstamo para el activo " + assetId);
+        return savedLoan;
     }
 
     @Transactional
@@ -73,11 +97,16 @@ public class LoanUseCase {
             throw new IllegalStateException("Asset is no longer available for loan");
         }
 
+        String previousAssetStatus = asset.getStatus();
         asset.setStatus("LOANED");
         assetRepositoryPort.save(asset);
         loan.setStatus(Loan.Status.APPROVED);
         loan.setInspector(inspector);
-        return loanRepositoryPort.save(loan);
+        Loan savedLoan = loanRepositoryPort.save(loan);
+        auditLogUseCase.record("LOAN_APPROVED", "LOAN", savedLoan.getId(),
+            "Préstamo aprobado por inspector " + inspectorId);
+        recordAssetStatusChange(asset, previousAssetStatus);
+        return savedLoan;
     }
 
     @Transactional
@@ -92,7 +121,10 @@ public class LoanUseCase {
         loan.setStatus(Loan.Status.REJECTED);
         loan.setInspector(inspector);
         loan.setRejectionReason(reason.trim());
-        return loanRepositoryPort.save(loan);
+        Loan savedLoan = loanRepositoryPort.save(loan);
+        auditLogUseCase.record("LOAN_REJECTED", "LOAN", savedLoan.getId(),
+            "Préstamo rechazado: " + loan.getRejectionReason());
+        return savedLoan;
     }
 
     @Transactional
@@ -137,6 +169,7 @@ public class LoanUseCase {
                 ? 0
                 : Math.toIntExact(Math.max(0, ChronoUnit.DAYS.between(loan.getDueLocalDate(), today)));
 
+        String previousAssetStatus = asset.getStatus();
         asset.setStatus(switch (condition) {
             case GOOD -> "AVAILABLE";
             case DAMAGED -> "UNDER_MAINTENANCE";
@@ -144,11 +177,29 @@ public class LoanUseCase {
         });
         assetRepositoryPort.save(asset);
 
+        if (condition == Loan.ReturnCondition.DAMAGED) {
+            MaintenanceRecord maintenanceRecord = maintenanceRecordRepositoryPort.save(MaintenanceRecord.builder()
+                .asset(asset)
+                .reason("Daño reportado al devolver el préstamo " + loan.getId())
+                .startDate(today)
+                .build());
+            auditLogUseCase.record("MAINTENANCE_OPENED", "MAINTENANCE", maintenanceRecord.getId(),
+                "Intervención abierta por devolución dañada del activo " + asset.getId());
+        }
+
         loan.setReturnCondition(condition);
         loan.setReturnDateTime(LocalDateTime.now());
         loan.setDelayDays(delayDays);
         loan.setStatus(Loan.Status.RETURNED);
-        return loanRepositoryPort.save(loan);
+        Loan savedLoan = loanRepositoryPort.save(loan);
+        auditLogUseCase.record("LOAN_RETURNED", "LOAN", savedLoan.getId(),
+            "Devolución registrada con condición " + condition);
+        recordAssetStatusChange(asset, previousAssetStatus);
+        if (delayDays > 0) {
+            auditLogUseCase.recordOnce("LOAN_BECAME_OVERDUE", "LOAN", savedLoan.getId(),
+                "Devolución con " + delayDays + " días de mora");
+        }
+        return savedLoan;
     }
 
     private User requireActiveUserWithRole(Long userId, String requiredRole) {
@@ -190,6 +241,27 @@ public class LoanUseCase {
         if (loan.getStatus() != expectedStatus) {
             throw new IllegalStateException("Loan must be in status " + expectedStatus);
         }
+    }
+
+    private void recordAssetStatusChange(Asset asset, String previousStatus) {
+        if (!java.util.Objects.equals(previousStatus, asset.getStatus())) {
+            auditLogUseCase.record("ASSET_STATUS_CHANGED", "ASSET", asset.getId(),
+                    previousStatus + " -> " + asset.getStatus());
+        }
+    }
+
+    @EventListener(ApplicationReadyEvent.class)
+    @Scheduled(cron = "0 0 0 * * *")
+    @Transactional
+    public void recordOverdueLoans() {
+        LocalDate today = LocalDate.now();
+        loanRepositoryPort.findAll().stream()
+                .filter(loan -> loan.getStatus() == Loan.Status.APPROVED
+                        && loan.getDueLocalDate() != null
+                        && loan.getDueLocalDate().isBefore(today))
+                .forEach(loan -> auditLogUseCase.recordOnce(
+                        "LOAN_BECAME_OVERDUE", "LOAN", loan.getId(),
+                        "Préstamo vencido desde " + loan.getDueLocalDate()));
     }
 
     public List<Loan> findAll() {

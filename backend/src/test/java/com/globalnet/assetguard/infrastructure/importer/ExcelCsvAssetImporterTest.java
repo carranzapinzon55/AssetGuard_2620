@@ -34,6 +34,18 @@ class ExcelCsvAssetImporterTest {
     }
 
     @Test
+    void parsesCsvWithoutSerialNumberColumn() throws Exception {
+        String csv = "model,estimatedValue,purchaseDate\n"
+                + "HP EliteBook,1200,2026-03-15\n";
+
+        List<AssetImportRow> rows = importer.parse("assets.csv", csv.getBytes(StandardCharsets.UTF_8));
+
+        assertEquals(1, rows.size());
+        assertEquals(null, rows.get(0).asset().getSerialNumber());
+        assertEquals("HP EliteBook", rows.get(0).asset().getModel());
+    }
+
+    @Test
     void parsesXlsxRowsAndAssetFields() throws Exception {
         byte[] content;
         try (XSSFWorkbook workbook = new XSSFWorkbook(); ByteArrayOutputStream output = new ByteArrayOutputStream()) {

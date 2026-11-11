@@ -110,7 +110,7 @@ type MaintenanceRecord {
 }
 
 input AssetInput {
-    serialNumber: String!
+    serialNumber: String
     model: String
     estimatedValue: Float
     status: String!
@@ -119,7 +119,7 @@ input AssetInput {
 
 input UpdateAssetInput {
     id: ID!
-    serialNumber: String!
+    serialNumber: String
     model: String
     estimatedValue: Float
     status: String!

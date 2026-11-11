@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Activity, AlertTriangle, CalendarDays, PackageCheck, RotateCcw } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
+import { useCurrency } from "@/components/currency-provider";
 import { Button, EmptyState, Feedback, FormField, LoadingRows, PageTitle, TextInput } from "@/components/workspace/ui";
 import { DASHBOARD_QUERY } from "@/lib/operations";
 import { errorMessage, queryGraphQL } from "@/lib/workspace";
@@ -12,6 +13,8 @@ type MetricsResult = { dashboardMetrics: Metrics };
 
 export function DashboardPage() {
   const { session } = useAuth();
+  const { formatMoney } = useCurrency();
+  const today = new Date().toISOString().slice(0, 10);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [appliedRange, setAppliedRange] = useState({ startDate: "", endDate: "" });
@@ -32,14 +35,14 @@ export function DashboardPage() {
     return () => { active = false; };
   }, [session?.token, refresh, appliedRange]);
 
-  const money = metrics ? new Intl.NumberFormat("es", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(metrics.estimatedLossValue) : "—";
+  const money = metrics ? formatMoney(metrics.estimatedLossValue) : "—";
   const punctuality = metrics ? Math.max(0, Math.min(100, metrics.onTimeReturnPercentage)) : 0;
 
   return (
     <div className="work-page">
       <PageTitle eyebrow="GLOBALNET · RESUMEN EJECUTIVO" title="Panel de control de activos" description="Salud financiera y operativa de la flota de activos." />
       <Feedback error={error} />
-      <section className="work-section dashboard-filters"><div className="filter-heading"><CalendarDays size={16} /><strong>Periodo de devoluciones</strong><span>Las existencias en campo muestran el estado actual.</span></div><div className="date-filter-controls"><FormField label="Desde"><TextInput type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} /></FormField><FormField label="Hasta"><TextInput type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} /></FormField><Button onClick={() => setAppliedRange({ startDate, endDate })}><Activity size={15} /> Aplicar periodo</Button><Button variant="quiet" onClick={() => { setStartDate(""); setEndDate(""); setAppliedRange({ startDate: "", endDate: "" }); setRefresh((value) => value + 1); }}><RotateCcw size={15} /> Limpiar</Button></div></section>
+      <section className="work-section dashboard-filters"><div className="filter-heading"><CalendarDays size={16} /><strong>Periodo de devoluciones</strong><span>Las existencias en campo muestran el estado actual.</span></div><div className="date-filter-controls"><FormField label="Desde"><TextInput type="date" max={today} value={startDate} onChange={(event) => setStartDate(event.target.value)} /></FormField><FormField label="Hasta"><TextInput type="date" min={today} value={endDate} onChange={(event) => setEndDate(event.target.value)} /></FormField><Button onClick={() => setAppliedRange({ startDate, endDate })}><Activity size={15} /> Aplicar periodo</Button><Button variant="quiet" onClick={() => { setStartDate(""); setEndDate(""); setAppliedRange({ startDate: "", endDate: "" }); setRefresh((value) => value + 1); }}><RotateCcw size={15} /> Limpiar</Button></div></section>
       {loading ? <LoadingRows label="Calculando métricas" /> : !metrics ? <EmptyState title="No hay métricas disponibles" detail="No se encontraron datos para el periodo seleccionado." /> : <>
         <section className="metric-grid">
           <article className="metric-panel loss"><div className="metric-panel-top"><span className="metric-icon"><AlertTriangle size={17} /></span><span className="work-eyebrow">MERMAS · PERIODO</span></div><strong className="metric-value">{money}</strong><p>Valor estimado de equipos dañados o perdidos.</p><div className="metric-foot"><span>ACTIVOS DAÑADOS + PERDIDOS</span></div></article>

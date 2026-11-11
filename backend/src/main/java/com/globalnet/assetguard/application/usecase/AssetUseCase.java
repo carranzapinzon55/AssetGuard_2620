@@ -3,9 +3,12 @@ package com.globalnet.assetguard.application.usecase;
 import com.globalnet.assetguard.domain.model.Asset;
 import com.globalnet.assetguard.domain.ports.output.AssetRepositoryPort;
 import java.util.List;
+import java.util.Locale;
 import java.util.NoSuchElementException;
 import java.util.Set;
+import java.util.UUID;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class AssetUseCase {
@@ -14,32 +17,29 @@ public class AssetUseCase {
             Set.of("AVAILABLE", "LOANED", "UNDER_MAINTENANCE", "LOST", "ON_LOAN", "MAINTENANCE");
 
     private final AssetRepositoryPort assetRepositoryPort;
+    private final AuditLogUseCase auditLogUseCase;
 
-    public AssetUseCase(AssetRepositoryPort assetRepositoryPort) {
+    public AssetUseCase(AssetRepositoryPort assetRepositoryPort, AuditLogUseCase auditLogUseCase) {
         this.assetRepositoryPort = assetRepositoryPort;
+        this.auditLogUseCase = auditLogUseCase;
     }
 
+    @Transactional
     public Asset register(Asset asset) {
         if (asset == null) {
             throw new IllegalArgumentException("Asset must not be null");
         }
 
-        String serialNumber = asset.getSerialNumber();
-        if (serialNumber == null || serialNumber.isBlank()) {
-            throw new IllegalArgumentException("Asset serial number must not be blank");
-        }
-        asset.setSerialNumber(serialNumber.trim());
-
-        if (assetRepositoryPort.findBySerialNumber(asset.getSerialNumber()).isPresent()) {
-            throw new IllegalArgumentException(
-                    "Asset serial number already exists: " + asset.getSerialNumber());
-        }
         if (asset.getStatus() == null || !ALLOWED_STATUSES.contains(asset.getStatus())) {
             throw new IllegalArgumentException(
                     "Asset status must be a recognized lifecycle status");
         }
 
-        return assetRepositoryPort.save(asset);
+        asset.setSerialNumber(generateSerialNumber(asset.getModel()));
+        Asset savedAsset = assetRepositoryPort.save(asset);
+        auditLogUseCase.record("ASSET_CREATED", "ASSET", savedAsset.getId(),
+                "Activo creado con serial " + savedAsset.getSerialNumber());
+        return savedAsset;
     }
 
     public Asset findById(Long id) {
@@ -50,28 +50,28 @@ public class AssetUseCase {
                 .orElseThrow(() -> new NoSuchElementException("Asset not found with ID: " + id));
     }
 
+    @Transactional
     public Asset update(Long id, Asset changes) {
         if (id == null || changes == null) {
             throw new IllegalArgumentException("Asset ID and changes are required");
         }
         Asset existing = findById(id);
-        if (changes.getSerialNumber() == null || changes.getSerialNumber().isBlank()) {
-            throw new IllegalArgumentException("Asset serial number must not be blank");
-        }
-        String serialNumber = changes.getSerialNumber().trim();
-        Asset duplicate = assetRepositoryPort.findBySerialNumber(serialNumber).orElse(null);
-        if (duplicate != null && !id.equals(duplicate.getId())) {
-            throw new IllegalArgumentException("Asset serial number already exists: " + serialNumber);
-        }
         if (changes.getStatus() == null || !ALLOWED_STATUSES.contains(changes.getStatus())) {
             throw new IllegalArgumentException("Asset status must be a recognized lifecycle status");
         }
-        existing.setSerialNumber(serialNumber);
+        String previousStatus = existing.getStatus();
         existing.setModel(changes.getModel());
         existing.setEstimatedValue(changes.getEstimatedValue());
         existing.setPurchaseDate(changes.getPurchaseDate());
         existing.setStatus(changes.getStatus());
-        return assetRepositoryPort.save(existing);
+        Asset savedAsset = assetRepositoryPort.save(existing);
+        auditLogUseCase.record("ASSET_UPDATED", "ASSET", savedAsset.getId(),
+                "Activo actualizado: " + savedAsset.getSerialNumber());
+        if (!java.util.Objects.equals(previousStatus, savedAsset.getStatus())) {
+            auditLogUseCase.record("ASSET_STATUS_CHANGED", "ASSET", savedAsset.getId(),
+                    previousStatus + " -> " + savedAsset.getStatus());
+        }
+        return savedAsset;
     }
 
     public Asset findBySerialNumber(String serialNumber) {
@@ -86,5 +86,17 @@ public class AssetUseCase {
 
     public List<Asset> findAll() {
         return assetRepositoryPort.findAll();
+    }
+
+    private String generateSerialNumber(String model) {
+        String brand = model == null || model.isBlank()
+                ? "UNKNOWN"
+                : model.trim().split("\\s+", 2)[0].replaceAll("[^A-Za-z0-9]", "")
+                        .toUpperCase(Locale.ROOT);
+        if (brand.isBlank()) {
+            brand = "UNKNOWN";
+        }
+        String shortId = UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase(Locale.ROOT);
+        return "SN-" + brand + "-" + shortId;
     }
 }

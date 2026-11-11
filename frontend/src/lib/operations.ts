@@ -43,6 +43,14 @@ export const LOANS_QUERY = `
   }
 `;
 
+export const AUDIT_TECHNICIANS_QUERY = `
+  query AuditTechnicians {
+    loans {
+      user { id fullName email role status }
+    }
+  }
+`;
+
 export const MY_LOAN_HISTORY = `
   query MyLoanHistory {
     myLoanHistory {

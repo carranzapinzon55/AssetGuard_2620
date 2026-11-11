@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
+import { usePathname } from "next/navigation";
 import { CalendarClock, Check, CircleAlert, ClipboardList, RotateCcw, X } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import { Button, DataTable, EmptyState, Feedback, FormField, LoadingRows, PageTitle, SelectInput, StatusTag, TextInput, useEscapeKey, useModalFocus } from "@/components/workspace/ui";
@@ -15,6 +16,8 @@ type MutationResult = { requestLoan?: { id: string }; approveLoan?: { id: string
 
 export function LoansPage() {
   const { session } = useAuth();
+  const pathname = usePathname();
+  const today = new Date().toISOString().slice(0, 10);
   const role = session?.user.role;
   const technician = role === "TECHNICIAN";
   const inspector = role === "INSPECTOR";
@@ -42,6 +45,10 @@ export function LoansPage() {
   const returnDialogRef = useModalFocus(returning !== null);
 
   useEffect(() => {
+    setShowRequest(false);
+  }, [pathname]);
+
+  useEffect(() => {
     if (!role) return;
     let active = true;
     const dataRequest = technician
@@ -64,7 +71,7 @@ export function LoansPage() {
 
   async function submitRequest(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (overdue) return;
+    if (overdue || !dueDate || dueDate < today) return;
     setSaving(true); setFeedback({});
     try {
       await queryGraphQL<MutationResult>(REQUEST_LOAN, { input: { assetId, dueDate } });
@@ -113,7 +120,7 @@ export function LoansPage() {
           </tr>)}
         </DataTable>}
       </section>
-      {showRequest && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setShowRequest(false); }}><section ref={requestDialogRef} tabIndex={-1} className="work-modal" role="dialog" aria-modal="true" aria-labelledby="loan-request-title"><div className="modal-heading"><div><p className="work-eyebrow">NUEVA CUSTODIA</p><h2 id="loan-request-title">Solicitar préstamo</h2></div><button className="table-action" type="button" aria-label="Cerrar" onClick={() => setShowRequest(false)}><X size={17} /></button></div><form className="work-form" onSubmit={submitRequest}><FormField label="Activo disponible"><SelectInput value={assetId} onChange={(event) => setAssetId(event.target.value)} required><option value="">Selecciona un equipo</option>{availableAssets.map((asset) => <option key={asset.id} value={asset.id}>{asset.serialNumber} · {asset.model}</option>)}</SelectInput></FormField><FormField label="Fecha prevista de devolución"><TextInput type="date" min={new Date().toISOString().slice(0, 10)} value={dueDate} onChange={(event) => setDueDate(event.target.value)} required /></FormField><p className="form-hint">La solicitud quedará pendiente hasta la aprobación de un inspector.</p><div className="modal-actions"><Button variant="secondary" type="button" onClick={() => setShowRequest(false)}>Cancelar</Button><Button type="submit" loading={saving} disabled={overdue}>Enviar solicitud</Button></div></form></section></div>}
+      {showRequest && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setShowRequest(false); }}><section ref={requestDialogRef} tabIndex={-1} className="work-modal" role="dialog" aria-modal="true" aria-labelledby="loan-request-title"><div className="modal-heading"><div><p className="work-eyebrow">NUEVA CUSTODIA</p><h2 id="loan-request-title">Solicitar préstamo</h2></div><button className="table-action" type="button" aria-label="Cerrar" onClick={() => setShowRequest(false)}><X size={17} /></button></div><form className="work-form" onSubmit={submitRequest}><FormField label="Activo disponible"><SelectInput value={assetId} onChange={(event) => setAssetId(event.target.value)} required><option value="">Selecciona un equipo</option>{availableAssets.map((asset) => <option key={asset.id} value={asset.id}>{asset.serialNumber} · {asset.model}</option>)}</SelectInput></FormField><FormField label="Fecha prevista de devolución"><TextInput type="date" min={today} value={dueDate} onChange={(event) => setDueDate(event.target.value)} required /></FormField><p className="form-hint">La solicitud quedará pendiente hasta la aprobación de un inspector.</p><div className="modal-actions"><Button variant="secondary" type="button" onClick={() => setShowRequest(false)}>Cancelar</Button><Button type="submit" loading={saving} disabled={overdue}>Enviar solicitud</Button></div></form></section></div>}
       {rejecting && <div className="modal-backdrop" role="presentation"><section ref={rejectDialogRef} tabIndex={-1} className="work-modal" role="dialog" aria-modal="true" aria-labelledby="reject-title"><div className="modal-heading"><div><p className="work-eyebrow">REVISIÓN</p><h2 id="reject-title">Rechazar solicitud</h2></div><button className="table-action" type="button" aria-label="Cerrar" onClick={() => setRejecting(null)}><X size={17} /></button></div><form className="work-form" onSubmit={reject}><p className="form-hint">Activo {rejecting.asset.serialNumber} · {rejecting.user?.fullName || rejecting.user?.email}</p><FormField label="Motivo del rechazo"><TextInput value={reason} onChange={(event) => setReason(event.target.value)} required /></FormField><div className="modal-actions"><Button variant="secondary" type="button" onClick={() => setRejecting(null)}>Cancelar</Button><Button variant="danger" type="submit" loading={saving}>Confirmar rechazo</Button></div></form></section></div>}
       {returning && <div className="modal-backdrop" role="presentation"><section ref={returnDialogRef} tabIndex={-1} className="work-modal" role="dialog" aria-modal="true" aria-labelledby="return-title"><div className="modal-heading"><div><p className="work-eyebrow">DEVOLUCIÓN FÍSICA</p><h2 id="return-title">{technician ? "Devolver activo" : "Registrar devolución"}</h2></div><button className="table-action" type="button" aria-label="Cerrar" onClick={() => setReturning(null)}><X size={17} /></button></div><form className="work-form" onSubmit={returnLoan}><p className="form-hint">Activo {returning.asset.serialNumber} · vencía el {returning.dueLocalDate ?? "sin fecha"}</p><FormField label="Condición al devolver"><SelectInput value={condition} onChange={(event) => setCondition(event.target.value as typeof condition)}><option value="GOOD">En buen estado</option><option value="DAMAGED">Dañado</option><option value="LOST">No localizado</option></SelectInput></FormField><p className="form-hint">{condition === "DAMAGED" ? "Confirmas que el equipo está dañado y pasará a mantenimiento." : condition === "LOST" ? "Confirmas que el equipo no está localizado y se registrará como merma." : "El equipo quedará disponible al registrar su devolución."}</p><div className="modal-actions"><Button variant="secondary" type="button" onClick={() => setReturning(null)}>Cancelar</Button><Button type="submit" loading={saving}>{condition === "DAMAGED" ? "Confirmar devolución con daño" : condition === "LOST" ? "Confirmar activo no localizado" : "Registrar devolución"}</Button></div></form></section></div>}
     </div>

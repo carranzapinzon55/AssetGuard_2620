@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { Boxes, Command, Moon, Search, Sun, UserRound } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import { ASSETS_QUERY, USERS_QUERY } from "@/lib/operations";
@@ -13,6 +13,14 @@ type PaletteResult = { label: string; detail: string; href: string; kind: "Activ
 export function WorkspaceTools() {
   const { session } = useAuth();
   const router = useRouter();
+
+  const pathname = usePathname();
+
+useEffect(() => {
+  setOpen(false);
+}, [pathname]);
+
+
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
@@ -20,6 +28,7 @@ export function WorkspaceTools() {
   const [assets, setAssets] = useState<AssetItem[]>([]);
   const [technicians, setTechnicians] = useState<UserItem[]>([]);
   const [selected, setSelected] = useState(0);
+  const themeTransitionTimer = useRef<number | null>(null);
   const paletteRef = useModalFocus(open);
 
   useEffect(() => {
@@ -92,8 +101,14 @@ export function WorkspaceTools() {
 
   function toggleTheme() {
     const next = document.documentElement.classList.contains("dark") ? "light" : "dark";
+    document.documentElement.classList.add("theme-transition");
     document.documentElement.classList.toggle("dark", next === "dark");
     localStorage.setItem("assetguard-theme", next);
+    if (themeTransitionTimer.current) window.clearTimeout(themeTransitionTimer.current);
+    themeTransitionTimer.current = window.setTimeout(() => {
+      document.documentElement.classList.remove("theme-transition");
+      themeTransitionTimer.current = null;
+    }, 320);
   }
 
   return <>

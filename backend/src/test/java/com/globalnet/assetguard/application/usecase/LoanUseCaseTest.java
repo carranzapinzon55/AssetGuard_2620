@@ -1,6 +1,7 @@
 package com.globalnet.assetguard.application.usecase;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -9,9 +10,11 @@ import static org.mockito.Mockito.when;
 
 import com.globalnet.assetguard.domain.model.Asset;
 import com.globalnet.assetguard.domain.model.Loan;
+import com.globalnet.assetguard.domain.model.MaintenanceRecord;
 import com.globalnet.assetguard.domain.model.User;
 import com.globalnet.assetguard.domain.ports.output.AssetRepositoryPort;
 import com.globalnet.assetguard.domain.ports.output.LoanRepositoryPort;
+import com.globalnet.assetguard.domain.ports.output.MaintenanceRecordRepositoryPort;
 import com.globalnet.assetguard.domain.ports.output.UserRepositoryPort;
 import java.time.LocalDate;
 import java.util.Optional;
@@ -19,6 +22,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -33,6 +37,12 @@ class LoanUseCaseTest {
 
     @Mock
     private UserRepositoryPort userRepositoryPort;
+
+    @Mock
+    private MaintenanceRecordRepositoryPort maintenanceRecordRepositoryPort;
+
+    @Mock
+    private AuditLogUseCase auditLogUseCase;
 
     @InjectMocks
     private LoanUseCase loanUseCase;
@@ -118,6 +128,8 @@ class LoanUseCaseTest {
         when(assetRepositoryPort.findById(30L)).thenReturn(Optional.of(availableAsset));
         when(assetRepositoryPort.save(any(Asset.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(loanRepositoryPort.save(any(Loan.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(maintenanceRecordRepositoryPort.save(any(MaintenanceRecord.class)))
+            .thenAnswer(invocation -> invocation.getArgument(0));
 
         Loan result = loanUseCase.returnAsset(40L, Loan.ReturnCondition.DAMAGED);
 
@@ -126,6 +138,12 @@ class LoanUseCaseTest {
         assertEquals(3, result.getDelayDays());
         assertEquals("UNDER_MAINTENANCE", availableAsset.getStatus());
         verify(assetRepositoryPort).save(availableAsset);
+        ArgumentCaptor<MaintenanceRecord> recordCaptor = ArgumentCaptor.forClass(MaintenanceRecord.class);
+        verify(maintenanceRecordRepositoryPort).save(recordCaptor.capture());
+        assertNull(recordCaptor.getValue().getEndDate());
+        assertEquals(LocalDate.now(), recordCaptor.getValue().getStartDate());
+        verify(auditLogUseCase).record("LOAN_RETURNED", "LOAN", 40L,
+            "Devolución registrada con condición DAMAGED");
     }
 
     @Test
@@ -145,6 +163,8 @@ class LoanUseCaseTest {
 
         assertEquals(Loan.Status.RETURNED, result.getStatus());
         assertEquals(Loan.ReturnCondition.GOOD, result.getReturnCondition());
+        verify(auditLogUseCase).record("LOAN_RETURNED", "LOAN", 40L,
+            "Devolución registrada con condición GOOD");
     }
 
     private Loan pendingLoan() {

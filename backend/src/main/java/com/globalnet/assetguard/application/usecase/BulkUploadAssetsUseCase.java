@@ -3,12 +3,8 @@ package com.globalnet.assetguard.application.usecase;
 import com.globalnet.assetguard.application.model.AssetImportRow;
 import com.globalnet.assetguard.application.port.input.AssetFileImporterPort;
 import com.globalnet.assetguard.domain.model.Asset;
-import com.globalnet.assetguard.domain.ports.output.AssetRepositoryPort;
 import java.io.IOException;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
-import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,13 +12,12 @@ import org.springframework.transaction.annotation.Transactional;
 public class BulkUploadAssetsUseCase {
 
     private final AssetFileImporterPort assetFileImporterPort;
-    private final AssetRepositoryPort assetRepositoryPort;
+    private final AssetUseCase assetUseCase;
 
     public BulkUploadAssetsUseCase(
-            AssetFileImporterPort assetFileImporterPort,
-            AssetRepositoryPort assetRepositoryPort) {
+            AssetFileImporterPort assetFileImporterPort, AssetUseCase assetUseCase) {
         this.assetFileImporterPort = assetFileImporterPort;
-        this.assetRepositoryPort = assetRepositoryPort;
+        this.assetUseCase = assetUseCase;
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -32,32 +27,17 @@ public class BulkUploadAssetsUseCase {
             throw new IllegalArgumentException("The upload contains no asset rows");
         }
 
-        Set<String> serialsInFile = new HashSet<>();
         List<Asset> savedAssets = new java.util.ArrayList<>(rows.size());
         for (AssetImportRow importRow : rows) {
-            Asset asset = importRow.asset();
-            validateRow(importRow.rowNumber(), asset, serialsInFile);
-            savedAssets.add(assetRepositoryPort.save(asset));
+            validateRow(importRow.rowNumber(), importRow.asset());
+            savedAssets.add(assetUseCase.register(importRow.asset()));
         }
         return savedAssets;
     }
 
-    private void validateRow(int rowNumber, Asset asset, Set<String> serialsInFile) {
+    private void validateRow(int rowNumber, Asset asset) {
         if (asset == null) {
             throw rowError(rowNumber, "La fila está vacía o es inválida");
-        }
-        String serial = asset.getSerialNumber();
-        if (serial == null || serial.isBlank()) {
-            throw rowError(rowNumber, "serialNumber es obligatorio");
-        }
-        serial = serial.trim();
-        asset.setSerialNumber(serial);
-        String normalizedSerial = serial.toUpperCase(Locale.ROOT);
-        if (!serialsInFile.add(normalizedSerial)) {
-            throw rowError(rowNumber, "El serial " + serial + " está duplicado en el archivo");
-        }
-        if (assetRepositoryPort.findBySerialNumber(serial).isPresent()) {
-            throw rowError(rowNumber, "El serial " + serial + " ya existe");
         }
         if (asset.getModel() == null || asset.getModel().isBlank()) {
             throw rowError(rowNumber, "model es obligatorio");

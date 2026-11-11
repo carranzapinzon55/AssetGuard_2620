@@ -61,13 +61,16 @@ public class RegisterUserUseCase {
         String normalizedRole = changes.getRole() == null
                 ? existing.getRole()
                 : changes.getRole().toUpperCase(Locale.ROOT);
-        if (!Set.of("ADMIN", "INSPECTOR", "TECHNICIAN").contains(normalizedRole)) {
+        if (normalizedRole == null || !Set.of("ADMIN", "INSPECTOR", "TECHNICIAN").contains(normalizedRole)) {
             throw new IllegalArgumentException("User role is not allowed");
+        }
+        if (existing.getRole() == null
+                || !normalizedRole.equals(existing.getRole().toUpperCase(Locale.ROOT))) {
+            throw new IllegalArgumentException("User role cannot be changed");
         }
 
         existing.setFullName(changes.getFullName().trim());
         existing.setEmail(normalizedEmail);
-        existing.setRole(normalizedRole);
         if (changes.getStatus() != null) {
             existing.setStatus(changes.getStatus());
         }

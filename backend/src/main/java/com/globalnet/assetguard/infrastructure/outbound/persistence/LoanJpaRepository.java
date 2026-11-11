@@ -12,10 +12,12 @@ import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
 
-@Repository
 public interface LoanJpaRepository extends JpaRepository<LoanEntity, Long> {
+
+  @Override
+  @EntityGraph(attributePaths = {"user", "asset", "inspector"})
+  List<LoanEntity> findAll();
 
     boolean existsByUser_IdAndStatusAndDueLocalDateBeforeAndReturnDateTimeIsNull(
             Long userId, Loan.Status status, LocalDate today);
