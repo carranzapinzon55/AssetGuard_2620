@@ -27,10 +27,10 @@ import { roleLabel } from "@/lib/localization";
 const navigation = [
   { href: "/workspace/dashboard", label: "Resumen", icon: LayoutDashboard, roles: ["ADMIN"] },
   { href: "/workspace/assets", label: "Activos", icon: Boxes, roles: ["ADMIN", "INSPECTOR", "TECHNICIAN"] },
-  { href: "/workspace/loans", label: "Préstamos", icon: ClipboardList, roles: ["ADMIN", "INSPECTOR", "TECHNICIAN"] },
+  { href: "/workspace/loans", label: "Préstamos", icon: ClipboardList, roles: ["INSPECTOR", "TECHNICIAN"] },
   { href: "/workspace/maintenance", label: "Mantenimiento", icon: Wrench, roles: ["ADMIN", "INSPECTOR"] },
   { href: "/workspace/history", label: "Mis custodias", icon: FileClock, roles: ["TECHNICIAN"] },
-  { href: "/workspace/audit", label: "Auditoría", icon: ShieldCheck, roles: ["ADMIN", "INSPECTOR"] },
+  { href: "/workspace/audit", label: "Auditoría", icon: ShieldCheck, roles: ["ADMIN"] },
   { href: "/workspace/users", label: "Usuarios", icon: ClipboardCheck, roles: ["ADMIN"] },
   { href: "/workspace/bulk-upload", label: "Carga masiva", icon: Upload, roles: ["ADMIN"] },
 ] as const;
@@ -62,6 +62,12 @@ export function ProtectedShell({ children }: { children: ReactNode }) {
     setLogoutConfirmOpen(false);
   });
 
+  // Cierra cualquier modal abierto si cambia la ruta o el usuario autenticado
+  useEffect(() => {
+    setProfileOpen(false);
+    setLogoutConfirmOpen(false);
+  }, [pathname, session?.user.id]);
+
   useEffect(() => {
     if (ready && !session) router.replace("/login");
     if (ready && session && !hasRouteAccess) router.replace(landingPath(session.user.role));
@@ -87,6 +93,8 @@ export function ProtectedShell({ children }: { children: ReactNode }) {
   }
 
   function confirmSignOut() {
+    setLogoutConfirmOpen(false);
+    setProfileOpen(false);
     signOut();
     router.replace("/login");
   }
@@ -94,7 +102,6 @@ export function ProtectedShell({ children }: { children: ReactNode }) {
   return (
     <div className="workspace min-h-screen">
       <aside className="sidebar backdrop-blur-xl">
-        {/* Encabezado del Sidebar con Isotipo nítido y texto alineado */}
         <Link
           className="brand-lockup flex items-center gap-3 px-3 py-4 border-b border-slate-200/80 dark:border-slate-800/80 text-decoration-none transition-opacity hover:opacity-95"
           href={landingPath(session.user.role)}
@@ -187,7 +194,7 @@ export function ProtectedShell({ children }: { children: ReactNode }) {
           </div>
         </header>
 
-        <main className="page-content">{children}</main>
+        <main className="page-content" key={pathname}>{children}</main>
         <CorporateFooter className="workspace-corporate-footer" />
       </div>
 

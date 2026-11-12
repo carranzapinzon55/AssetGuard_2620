@@ -3,14 +3,21 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { ChevronLeft, ChevronRight, Download, Filter, RotateCcw, ShieldCheck } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
-import { AUDIT_TECHNICIANS_QUERY, USERS_QUERY } from "@/lib/operations";
+import { AUDIT_QUERY, AUDIT_TECHNICIANS_QUERY, USERS_QUERY } from "@/lib/operations";
 import { Button, DataTable, EmptyState, Feedback, FormField, LoadingRows, PageTitle, SelectInput, StatusTag, TextInput } from "@/components/workspace/ui";
-import { AUDIT_QUERY } from "@/lib/operations";
 import { errorMessage, queryGraphQL, type LoanItem, type UserItem } from "@/lib/workspace";
 
 type AuditResult = { auditLogs: { loans: LoanItem[]; totalElements: number; page: number; limit: number; totalPages: number } };
 type AuditTechnicianLoans = { loans: Array<{ user: (UserItem & { role: string }) | null }> };
 type UsersResult = { users: UserItem[] };
+
+function getLocalTodayIso(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
 
 function csvField(value: string) {
   const safeValue = /^[=+\-@]/.test(value) ? `'${value}` : value;
@@ -27,7 +34,7 @@ export function AuditPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const limit = 20;
-  const today = new Date().toISOString().slice(0, 10);
+  const today = getLocalTodayIso();
 
   useEffect(() => {
     if (!session) return;
@@ -66,12 +73,27 @@ export function AuditPage() {
   }, [session?.token, applied, page]);
 
   function applyFilters(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); setPage(0); setApplied(filters);
+    event.preventDefault();
+    const currentToday = getLocalTodayIso();
+    if ((filters.startDate && filters.startDate > currentToday) || (filters.endDate && filters.endDate > currentToday)) {
+      setError("Las fechas de auditoría no pueden ser posteriores a hoy.");
+      return;
+    }
+    if (filters.startDate && filters.endDate && filters.startDate > filters.endDate) {
+      setError("La fecha 'Desde' no puede ser posterior a 'Hasta'.");
+      return;
+    }
+    setError("");
+    setPage(0);
+    setApplied(filters);
   }
 
   function resetFilters() {
     const empty = { serialNumber: "", technicianId: "", startDate: "", endDate: "", status: "" };
-    setFilters(empty); setApplied(empty); setPage(0);
+    setError("");
+    setFilters(empty);
+    setApplied(empty);
+    setPage(0);
   }
 
   function exportReport() {
@@ -93,7 +115,7 @@ export function AuditPage() {
     const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = `assetguard-auditoria-${new Date().toISOString().slice(0, 10)}.csv`;
+    anchor.download = `assetguard-auditoria-${getLocalTodayIso()}.csv`;
     anchor.click();
     URL.revokeObjectURL(url);
   }
@@ -106,8 +128,8 @@ export function AuditPage() {
         <form className="audit-filter-grid" onSubmit={applyFilters}>
           <FormField label="Número de serie"><TextInput value={filters.serialNumber} onChange={(event) => setFilters({ ...filters, serialNumber: event.target.value })} placeholder="AG-0000" /></FormField>
           <FormField label="Técnico"><SelectInput value={filters.technicianId} onChange={(event) => setFilters({ ...filters, technicianId: event.target.value })}><option value="">Todos los técnicos</option>{technicians.map((technician) => <option key={technician.id} value={technician.id}>{technician.fullName || technician.email}</option>)}</SelectInput></FormField>
-          <FormField label="Desde"><TextInput type="date" max={today} value={filters.startDate} onChange={(event) => setFilters({ ...filters, startDate: event.target.value })} /></FormField>
-          <FormField label="Hasta"><TextInput type="date" min={today} value={filters.endDate} onChange={(event) => setFilters({ ...filters, endDate: event.target.value })} /></FormField>
+          <FormField label="Desde"><TextInput type="date" max={filters.endDate || today} value={filters.startDate} onChange={(event) => setFilters({ ...filters, startDate: event.target.value })} /></FormField>
+          <FormField label="Hasta"><TextInput type="date" min={filters.startDate || undefined} max={today} value={filters.endDate} onChange={(event) => setFilters({ ...filters, endDate: event.target.value })} /></FormField>
           <FormField label="Estado"><SelectInput value={filters.status} onChange={(event) => setFilters({ ...filters, status: event.target.value })}><option value="">Todos</option><option value="PENDING">Pendiente</option><option value="APPROVED">Aprobado</option><option value="REJECTED">Rechazado</option><option value="RETURNED">Devuelto</option></SelectInput></FormField>
           <div className="filter-actions"><Button type="submit"><Filter size={15} /> Aplicar</Button><Button type="button" variant="quiet" onClick={resetFilters}><RotateCcw size={15} /> Limpiar</Button></div>
         </form>

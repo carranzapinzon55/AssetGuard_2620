@@ -14,10 +14,18 @@ type HistoryResult = { myLoanHistory: LoanItem[] };
 type AssetsResult = { assets: AssetItem[] };
 type MutationResult = { requestLoan?: { id: string }; approveLoan?: { id: string }; rejectLoan?: { id: string }; returnLoan?: { id: string } };
 
+function getLocalTodayIso(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 export function LoansPage() {
   const { session } = useAuth();
   const pathname = usePathname();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = getLocalTodayIso();
   const role = session?.user.role;
   const technician = role === "TECHNICIAN";
   const inspector = role === "INSPECTOR";
@@ -71,7 +79,11 @@ export function LoansPage() {
 
   async function submitRequest(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (overdue || !dueDate || dueDate < today) return;
+    if (overdue) return;
+    if (!dueDate || dueDate < getLocalTodayIso()) {
+      setFeedback({ error: "La fecha prevista de devolución no puede ser anterior a hoy." });
+      return;
+    }
     setSaving(true); setFeedback({});
     try {
       await queryGraphQL<MutationResult>(REQUEST_LOAN, { input: { assetId, dueDate } });

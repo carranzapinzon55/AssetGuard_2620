@@ -43,7 +43,7 @@ public class LoanGraphQLController {
     }
 
     @QueryMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'INSPECTOR')")
+    @PreAuthorize("hasRole('ADMIN')")
     public LoanAuditPageView auditLogs(
             @Argument String serialNumber,
             @Argument Long technicianId,

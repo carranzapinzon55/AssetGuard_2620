@@ -104,13 +104,13 @@ export function LoadingRows({ label = "Cargando datos" }: { label?: string }) {
   return (
     <div className="loading-rows" role="status" aria-label={label}>
       <span className="sr-only">{label}</span>
-      <div className="w-full space-y-3 px-4 py-4" aria-hidden="true">
+      <div className="loading-skeleton-list" aria-hidden="true">
         {Array.from({ length: 5 }, (_, row) => (
-          <div key={row} className="grid grid-cols-4 gap-4 animate-pulse border-b border-slate-100 py-3 dark:border-slate-700">
-            <span className="h-3 rounded-sm bg-slate-200 dark:bg-slate-700" />
-            <span className="h-3 rounded-sm bg-slate-100 dark:bg-slate-800" />
-            <span className="h-3 rounded-sm bg-slate-100 dark:bg-slate-800" />
-            <span className="h-3 rounded-sm bg-slate-200 dark:bg-slate-700" />
+          <div key={row} className="loading-skeleton-row">
+            <span className="loading-skeleton-line" />
+            <span className="loading-skeleton-line" />
+            <span className="loading-skeleton-line" />
+            <span className="loading-skeleton-line" />
           </div>
         ))}
       </div>

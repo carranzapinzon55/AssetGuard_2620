@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Boxes, Command, Moon, Search, Sun, UserRound } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
+import { useCurrency } from "@/components/currency-provider";
 import { ASSETS_QUERY, USERS_QUERY } from "@/lib/operations";
 import { errorMessage, queryGraphQL, type AssetItem, type UserItem } from "@/lib/workspace";
 import { useModalFocus } from "@/components/workspace/ui";
@@ -12,14 +13,9 @@ type PaletteResult = { label: string; detail: string; href: string; kind: "Activ
 
 export function WorkspaceTools() {
   const { session } = useAuth();
+  const { currency, setCurrency } = useCurrency();
   const router = useRouter();
-
   const pathname = usePathname();
-
-useEffect(() => {
-  setOpen(false);
-}, [pathname]);
-
 
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -30,6 +26,10 @@ useEffect(() => {
   const [selected, setSelected] = useState(0);
   const themeTransitionTimer = useRef<number | null>(null);
   const paletteRef = useModalFocus(open);
+
+  useEffect(() => {
+    setOpen(false);
+  }, [pathname]);
 
   useEffect(() => {
     const stored = localStorage.getItem("assetguard-theme");
@@ -112,6 +112,10 @@ useEffect(() => {
   }
 
   return <>
+    <div className="currency-switch" role="group" aria-label="Moneda de visualización" title="Tasa referencial: 1 USD = 4.000 COP">
+      <button type="button" aria-pressed={currency === "USD"} onClick={() => setCurrency("USD")}>USD</button>
+      <button type="button" aria-pressed={currency === "COP"} onClick={() => setCurrency("COP")}>COP</button>
+    </div>
     <button type="button" className="workspace-tool-button" onClick={openPalette} aria-label="Búsqueda global" title="Búsqueda global (Ctrl+K)">
       <Search size={15} /><span>Buscar</span><kbd><Command size={10} /> K</kbd>
     </button>
