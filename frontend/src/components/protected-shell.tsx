@@ -37,6 +37,7 @@ const navigation = [
 
 const sectionTitles: Record<string, string> = {
   dashboard: "Panel de control y métricas",
+  about: "Información institucional",
   assets: "Inventario de activos",
   loans: "Gestión de préstamos",
   maintenance: "Mantenimiento técnico",
@@ -54,7 +55,7 @@ export function ProtectedShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const section = pathname.split("/")[2] || "dashboard";
   const allowedRoles = navigation.find((item) => item.href === `/workspace/${section}`)?.roles;
-  const hasRouteAccess = !allowedRoles || allowedRoles.some((role) => role === session?.user.role);
+  const hasRouteAccess = section === "about" || !allowedRoles || allowedRoles.some((role) => role === session?.user.role);
   const profileDialogRef = useModalFocus(profileOpen || logoutConfirmOpen);
 
   useEscapeKey(profileOpen || logoutConfirmOpen, () => {
@@ -130,11 +131,15 @@ export function ProtectedShell({ children }: { children: ReactNode }) {
           </div>
         </Link>
 
-        <div className="workspace-switcher mt-3">
-          <span className="workspace-monogram">GN</span>
-          <span className="workspace-copy"><strong>GlobalNet</strong><small>Operaciones</small></span>
-          <ArrowUpRight size={14} className="muted-icon" />
-        </div>
+        <Link
+          className={`workspace-switcher mt-3 no-underline transition-colors hover:border-emerald-500/40 hover:bg-emerald-50/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500 dark:hover:border-emerald-500/40 dark:hover:bg-emerald-950/30${pathname === "/workspace/about" ? " border-emerald-500/45 bg-emerald-50/70 dark:border-emerald-500/45 dark:bg-emerald-950/35" : ""}`}
+          href="/workspace/about"
+          aria-current={pathname === "/workspace/about" ? "page" : undefined}
+        >
+          <span className={`workspace-monogram${pathname === "/workspace/about" ? " !bg-emerald-100 !text-emerald-800 dark:!bg-emerald-900/60 dark:!text-emerald-200" : ""}`}>GN</span>
+          <span className="workspace-copy"><strong className={pathname === "/workspace/about" ? "!text-emerald-800 dark:!text-emerald-200" : ""}>GlobalNet</strong><small>Operaciones</small></span>
+          <ArrowUpRight size={14} className={pathname === "/workspace/about" ? "text-emerald-700 dark:text-emerald-300" : "muted-icon"} />
+        </Link>
 
         <p className="nav-caption">ESPACIO DE TRABAJO</p>
         <nav className="main-nav" aria-label="Navegación principal">
