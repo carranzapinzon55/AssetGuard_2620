@@ -1223,3 +1223,94 @@ html:not(.dark) .login-card-wrap.login-card-surface {
   background: #ffffff !important;
   box-shadow: 0 20px 50px rgb(15 23 42 / 6%), 0 1px 3px rgb(15 23 42 / 3%) !important;
 }
+
+
+/* ==========================================================================
+   OVERRIDES FINALES LOGIN MODO OSCURO (OBSIDIAN & EMERALD)
+   ========================================================================== */
+html.dark .login-page {
+  background: radial-gradient(circle at 20% 20%, rgb(16 185 129 / 14%), transparent 45%),
+              linear-gradient(135deg, #071318 0%, #09151e 50%, #0b1924 100%) !important;
+}
+
+html.dark .login-aside {
+  background: transparent !important;
+  color: #f1f5f9 !important;
+}
+
+html.dark .login-aside h1 {
+  color: #f8fafc !important;
+}
+
+html.dark .login-aside h1 em {
+  color: #34d399 !important;
+}
+
+html.dark .aside-description {
+  color: #94a3b8 !important;
+}
+
+html.dark .aside-facts > div {
+  border: 1px solid rgb(51 65 85 / 70%) !important;
+  background: rgb(15 23 42 / 65%) !important;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 28%) !important;
+}
+
+html.dark .fact-icon {
+  border: 1px solid rgb(16 185 129 / 25%) !important;
+  background: rgb(6 78 59 / 45%) !important;
+  color: #34d399 !important;
+}
+
+html.dark .aside-facts strong {
+  color: #f1f5f9 !important;
+}
+
+html.dark .aside-facts small {
+  color: #94a3b8 !important;
+}
+
+html.dark .login-card-wrap.login-card-surface {
+  border: 1px solid rgb(51 65 85 / 80%) !important;
+  background: rgb(15 23 42 / 78%) !important;
+  box-shadow: 0 24px 50px rgb(0 0 0 / 45%) !important;
+}
+
+html.dark .login-card-heading h2 {
+  color: #f8fafc !important;
+}
+
+html.dark .login-card-heading > p:last-child,
+html.dark .login-form > label,
+html.dark .password-label-row label {
+  color: #cbd5e1 !important;
+}
+
+html.dark .input-wrap {
+  border: 1px solid #334155 !important;
+  background: #0f172a !important;
+  color: #94a3b8 !important;
+}
+
+html.dark .input-wrap:focus-within {
+  border-color: #10b981 !important;
+  background: #0b1322 !important;
+  box-shadow: 0 0 0 3px rgb(16 185 129 / 20%) !important;
+}
+
+html.dark .input-wrap input {
+  color: #f8fafc !important;
+}
+
+html.dark .input-wrap input::placeholder {
+  color: #64748b !important;
+}
+
+html.dark .input-wrap input:-webkit-autofill,
+html.dark .input-wrap input:-webkit-autofill:hover,
+html.dark .input-wrap input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px #0f172a inset !important;
+  -webkit-text-fill-color: #f8fafc !important;
+  caret-color: #f8fafc !important;
+  transition: background-color 99999s ease-in-out 0s !important;
+}
