@@ -20,6 +20,12 @@ export const ASSETS_QUERY = `
   }
 `;
 
+export const ASSETS_CATALOG_QUERY = `
+  query AssetCatalog {
+    assets { id serialNumber model status }
+  }
+`;
+
 export const CREATE_ASSET = `
   mutation CreateAsset($input: AssetInput!) {
     createAsset(input: $input) { id serialNumber model estimatedValue status purchaseDate }

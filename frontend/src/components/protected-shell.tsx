@@ -20,7 +20,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { WorkspaceTools } from "@/components/workspace/workspace-tools";
 import { CorporateFooter } from "@/components/corporate-footer";
-import { Button, useEscapeKey, useModalFocus } from "@/components/workspace/ui";
+import { ConfirmDialog, useEscapeKey, useModalFocus } from "@/components/workspace/ui";
 import { landingPath } from "@/lib/auth";
 import { roleLabel } from "@/lib/localization";
 
@@ -56,12 +56,9 @@ export function ProtectedShell({ children }: { children: ReactNode }) {
   const section = pathname.split("/")[2] || "dashboard";
   const allowedRoles = navigation.find((item) => item.href === `/workspace/${section}`)?.roles;
   const hasRouteAccess = section === "about" || !allowedRoles || allowedRoles.some((role) => role === session?.user.role);
-  const profileDialogRef = useModalFocus(profileOpen || logoutConfirmOpen);
+  const profileDialogRef = useModalFocus(profileOpen);
 
-  useEscapeKey(profileOpen || logoutConfirmOpen, () => {
-    setProfileOpen(false);
-    setLogoutConfirmOpen(false);
-  });
+  useEscapeKey(profileOpen, () => setProfileOpen(false));
 
   // Cierra cualquier modal abierto si cambia la ruta o el usuario autenticado
   useEffect(() => {
@@ -267,46 +264,16 @@ export function ProtectedShell({ children }: { children: ReactNode }) {
         </div>
       )}
 
-      {logoutConfirmOpen && (
-        <div
-          className="modal-backdrop"
-          role="presentation"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) setLogoutConfirmOpen(false);
-          }}
-        >
-          <section
-            ref={profileDialogRef}
-            className="work-modal"
-            role="alertdialog"
-            aria-modal="true"
-            aria-labelledby="logout-title"
-            aria-describedby="logout-description"
-            tabIndex={-1}
-          >
-            <div className="modal-heading">
-              <div>
-                <p className="work-eyebrow">SESIÓN</p>
-                <h2 id="logout-title">Cerrar sesión</h2>
-              </div>
-              <button type="button" className="table-action" aria-label="Cancelar" onClick={() => setLogoutConfirmOpen(false)}>
-                <X size={17} />
-              </button>
-            </div>
-            <p id="logout-description" className="legal-notice-copy">
-              ¿Deseas cerrar tu sesión actual en AssetGuard?
-            </p>
-            <div className="modal-actions">
-              <Button variant="secondary" type="button" onClick={() => setLogoutConfirmOpen(false)}>
-                Seguir en AssetGuard
-              </Button>
-              <Button variant="danger" type="button" onClick={confirmSignOut}>
-                Cerrar sesión
-              </Button>
-            </div>
-          </section>
-        </div>
-      )}
+      <ConfirmDialog
+        open={logoutConfirmOpen}
+        title="Cerrar sesión"
+        message="¿Deseas cerrar tu sesión actual en AssetGuard?"
+        confirmLabel="Cerrar sesión"
+        cancelLabel="Seguir en AssetGuard"
+        confirmVariant="danger"
+        onCancel={() => setLogoutConfirmOpen(false)}
+        onConfirm={confirmSignOut}
+      />
     </div>
   );
 }

@@ -58,17 +58,6 @@ public class RegisterUserUseCase {
                 && userRepositoryPort.findByEmail(normalizedEmail).isPresent()) {
             throw new IllegalArgumentException("Email is already registered");
         }
-        String normalizedRole = changes.getRole() == null
-                ? existing.getRole()
-                : changes.getRole().toUpperCase(Locale.ROOT);
-        if (normalizedRole == null || !Set.of("ADMIN", "INSPECTOR", "TECHNICIAN").contains(normalizedRole)) {
-            throw new IllegalArgumentException("User role is not allowed");
-        }
-        if (existing.getRole() == null
-                || !normalizedRole.equals(existing.getRole().toUpperCase(Locale.ROOT))) {
-            throw new IllegalArgumentException("User role cannot be changed");
-        }
-
         existing.setFullName(changes.getFullName().trim());
         existing.setEmail(normalizedEmail);
         if (changes.getStatus() != null) {

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useSearchParams } from "next/navigation";
 import { Edit3, Plus, Search, UserRound, X } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
-import { Button, DataTable, EmptyState, Feedback, FormField, LoadingRows, PageTitle, SelectInput, StatusTag, TextInput, useEscapeKey, useModalFocus } from "@/components/workspace/ui";
+import { Button, CopyButton, DataTable, EmptyState, Feedback, FormField, LoadingRows, PageTitle, SelectInput, StatusTag, TextInput, useEscapeKey, useModalFocus } from "@/components/workspace/ui";
 import { CREATE_USER, UPDATE_USER, USERS_QUERY } from "@/lib/operations";
 import { roleLabel } from "@/lib/localization";
 import { errorMessage, queryGraphQL, type UserItem } from "@/lib/workspace";
@@ -118,7 +118,7 @@ export function UsersPage() {
         {loading ? <LoadingRows label="Cargando usuarios" /> : filtered.length === 0 ? <EmptyState title={users.length === 0 ? "No hay usuarios registrados" : "Sin coincidencias"} detail={users.length === 0 ? "No hay usuarios registrados en el sistema en este momento." : "No encontramos usuarios que coincidan con la búsqueda."} /> : (
           <DataTable headings={["Usuario", "Correo", "Rol", "Estado", "Acciones"]}>
             {filtered.map((user) => <tr key={user.id}>
-              <td><span className="table-primary">{user.fullName || "Sin nombre"}</span><small className="table-secondary">ID {user.id}</small></td>
+              <td><span className="table-primary">{user.fullName || "Sin nombre"}</span><small className="table-secondary copy-value">ID <span className="telemetry-value">{user.id}</span><CopyButton className="inline-copy" text={user.id} label={`Copiar ID de ${user.fullName || user.email}`} /></small></td>
               <td>{user.email}</td><td><span className="role-label">{roleLabel(user.role)}</span></td><td><StatusTag value={user.status ? "ACTIVE" : "INACTIVE"} /></td>
               <td><button className="table-action" type="button" onClick={() => startEdit(user)} aria-label={`Editar usuario ${user.email}`} title={`Editar usuario ${user.email}`}><Edit3 size={15} /></button></td>
             </tr>)}

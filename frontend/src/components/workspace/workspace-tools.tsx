@@ -5,9 +5,9 @@ import { usePathname, useRouter } from "next/navigation";
 import { Boxes, Command, Moon, Search, Sun, UserRound } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import { useCurrency } from "@/components/currency-provider";
-import { ASSETS_QUERY, USERS_QUERY } from "@/lib/operations";
+import { ASSETS_CATALOG_QUERY, USERS_QUERY } from "@/lib/operations";
 import { errorMessage, queryGraphQL, type AssetItem, type UserItem } from "@/lib/workspace";
-import { useModalFocus } from "@/components/workspace/ui";
+import { CopyButton, useModalFocus } from "@/components/workspace/ui";
 
 type PaletteResult = { label: string; detail: string; href: string; kind: "Activo" | "Técnico" };
 
@@ -60,7 +60,7 @@ export function WorkspaceTools() {
   useEffect(() => {
     if (!open || !session) return;
     let active = true;
-    const assetRequest = queryGraphQL<{ assets: AssetItem[] }>(ASSETS_QUERY)
+    const assetRequest = queryGraphQL<{ assets: AssetItem[] }>(ASSETS_CATALOG_QUERY)
       .then((result) => { if (active) setAssets(result.assets); })
       .catch((requestError: unknown) => { if (active) setError(errorMessage(requestError)); });
     const technicianRequest = session.user.role === "ADMIN"
@@ -122,7 +122,7 @@ export function WorkspaceTools() {
     <button type="button" className="workspace-tool-button theme-toggle" onClick={toggleTheme} aria-label="Cambiar tema claro u oscuro" title="Cambiar tema claro u oscuro">
       <Moon size={16} className="dark:hidden" /><Sun size={16} className="hidden dark:block" />
     </button>
-    {open && <div className="fixed inset-0 z-50 flex items-start justify-center bg-slate-950/45 px-4 pt-[12vh] backdrop-blur-sm dark:bg-black/65" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setOpen(false); }}>
+    {open && <div className="fixed inset-0 z-50 flex items-start justify-center bg-slate-950/45 px-4 pt-[12vh] backdrop-blur-sm dark:bg-slate-950/75" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setOpen(false); }}>
       <section ref={paletteRef} tabIndex={-1} className="w-full max-w-xl overflow-hidden rounded-lg border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900" role="dialog" aria-modal="true" aria-label="Búsqueda global">
         <div className="flex items-center gap-3 border-b border-slate-200 px-4 dark:border-slate-700">
           <Search size={18} className="shrink-0 text-slate-400" />
@@ -138,11 +138,14 @@ export function WorkspaceTools() {
             : error ? <p role="alert" className="px-3 py-8 text-center text-sm text-rose-700 dark:text-rose-300">{error}</p>
               : normalizedQuery.length < 2 ? <p className="px-3 py-8 text-center text-sm text-slate-500">Escribe al menos 2 caracteres para buscar.</p>
                 : results.length === 0 ? <p className="px-3 py-8 text-center text-sm text-slate-500">Sin resultados para esta búsqueda.</p>
-                  : results.map((result, index) => <button key={`${result.kind}-${result.href}`} type="button" className={`flex w-full items-center gap-3 rounded-md px-3 py-3 text-left transition-colors duration-150 ${index === selected ? "bg-blue-50 text-blue-950 dark:bg-slate-800 dark:text-white" : "text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800"}`} onMouseEnter={() => setSelected(index)} onClick={() => selectResult(index)}>
-                    <span className="grid size-9 shrink-0 place-items-center rounded-md bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">{result.kind === "Activo" ? <Boxes size={16} /> : <UserRound size={16} />}</span>
-                    <span className="min-w-0 flex-1"><strong className="block truncate text-sm font-semibold">{result.label}</strong><small className="block truncate text-xs text-slate-500 dark:text-slate-400">{result.detail}</small></span>
-                    <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{result.kind}</span>
-                  </button>)}
+                  : results.map((result, index) => <div key={`${result.kind}-${result.href}`} className={`flex w-full items-center gap-2 rounded-md px-2 py-2 transition-colors duration-150 ${index === selected ? "bg-blue-50 text-blue-950 dark:bg-slate-800 dark:text-white" : "text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800"}`} onMouseEnter={() => setSelected(index)}>
+                      <button type="button" className="flex min-w-0 flex-1 items-center gap-3 rounded-md py-1 text-left" onClick={() => selectResult(index)}>
+                        <span className="grid size-9 shrink-0 place-items-center rounded-md bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">{result.kind === "Activo" ? <Boxes size={16} /> : <UserRound size={16} />}</span>
+                        <span className="min-w-0 flex-1"><strong className={`block truncate text-sm font-semibold ${result.kind === "Activo" ? "telemetry-value" : ""}`}>{result.label}</strong><small className="block truncate text-xs text-slate-500 dark:text-slate-400">{result.detail}</small></span>
+                        <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{result.kind}</span>
+                      </button>
+                      <CopyButton className="inline-copy" text={result.label} label={`Copiar ${result.kind === "Activo" ? "serie" : "usuario"} ${result.label}`} />
+                    </div>)}
         </div>
         <footer className="flex items-center justify-between border-t border-slate-200 px-4 py-2.5 text-[10px] text-slate-500 dark:border-slate-700 dark:text-slate-400"><span>ACTIVOS{session?.user.role === "ADMIN" ? " · TÉCNICOS" : ""}</span><span>↑ ↓ navegar · ↵ abrir</span></footer>
       </section>

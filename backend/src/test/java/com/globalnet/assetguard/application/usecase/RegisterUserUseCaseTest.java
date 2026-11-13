@@ -1,10 +1,8 @@
 package com.globalnet.assetguard.application.usecase;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -52,8 +50,8 @@ class RegisterUserUseCaseTest {
         assertTrue(result.getPassword().startsWith("$2"));
     }
 
-        @Test
-        void managedUserUpdateRejectsRoleChanges() {
+    @Test
+    void managedUserUpdateIgnoresRoleChangesInPayload() {
         User existing = User.builder()
             .id(5L)
             .fullName("Admin")
@@ -62,17 +60,18 @@ class RegisterUserUseCaseTest {
             .status(true)
             .build();
         when(userRepositoryPort.findById(5L)).thenReturn(Optional.of(existing));
+        when(userRepositoryPort.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
         registerUserUseCase = new RegisterUserUseCase(userRepositoryPort, passwordEncoder);
 
-        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
-            () -> registerUserUseCase.updateManagedUser(User.builder()
-                .id(5L)
-                .fullName("Admin Updated")
-                .email("admin@example.com")
-                .role("TECHNICIAN")
-                .build()));
+        User updated = registerUserUseCase.updateManagedUser(User.builder()
+            .id(5L)
+            .fullName("Admin Updated")
+            .email("admin@example.com")
+            .role("INVALID_ROLE")
+            .build());
 
-        assertEquals("User role cannot be changed", exception.getMessage());
-        verify(userRepositoryPort, never()).save(any(User.class));
-        }
+        assertEquals("Admin Updated", updated.getFullName());
+        assertEquals("ADMIN", updated.getRole());
+        verify(userRepositoryPort).save(existing);
+    }
 }

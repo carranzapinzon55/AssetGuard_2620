@@ -5,8 +5,9 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { Boxes, ChevronLeft, ChevronRight, Edit3, Plus, Search, X } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import { useCurrency } from "@/components/currency-provider";
-import { Button, DataTable, EmptyState, Feedback, FormField, LoadingRows, PageTitle, SelectInput, StatusTag, TextInput, useEscapeKey, useModalFocus } from "@/components/workspace/ui";
-import { ASSETS_QUERY, CREATE_ASSET, UPDATE_ASSET } from "@/lib/operations";
+import { Button, CopyButton, DataTable, EmptyState, Feedback, FormField, LoadingRows, PageTitle, SelectInput, StatusTag, TextInput, useEscapeKey, useModalFocus } from "@/components/workspace/ui";
+import { ASSETS_CATALOG_QUERY, ASSETS_QUERY, CREATE_ASSET, UPDATE_ASSET } from "@/lib/operations";
+import { formatCurrency } from "@/lib/utils";
 import { errorMessage, queryGraphQL, type AssetItem } from "@/lib/workspace";
 
 type AssetsResult = { assets: AssetItem[] };
@@ -24,10 +25,11 @@ function getLocalTodayIso(): string {
 
 export function AssetsPage() {
   const { session } = useAuth();
-  const { currency, formatMoney, convertToUsd, convertFromUsd } = useCurrency();
+  const { currency, convertToUsd, convertFromUsd } = useCurrency();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const isAdmin = session?.user.role === "ADMIN";
+  const isTechnician = session?.user.role === "TECHNICIAN";
   const todayIso = getLocalTodayIso();
 
   const [assets, setAssets] = useState<AssetItem[]>([]);
@@ -59,12 +61,12 @@ export function AssetsPage() {
 
   useEffect(() => {
     let active = true;
-    queryGraphQL<AssetsResult>(ASSETS_QUERY)
+    queryGraphQL<AssetsResult>(isTechnician ? ASSETS_CATALOG_QUERY : ASSETS_QUERY)
       .then((result) => { if (active) setAssets(result.assets); })
       .catch((error: unknown) => { if (active) setFeedback({ error: errorMessage(error) }); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [session?.token, refresh]);
+  }, [session?.token, refresh, isTechnician]);
 
   const filtered = useMemo(() => assets.filter((asset) => {
     const matchesText = `${asset.serialNumber} ${asset.model ?? ""}`.toLowerCase().includes(query.trim().toLowerCase());
@@ -171,13 +173,13 @@ export function AssetsPage() {
             detail={assets.length === 0 ? "No se encontraron equipos tecnológicos disponibles en el inventario." : "Prueba con otro número de serie, modelo o estado."}
           />
         ) : (
-          <DataTable headings={["Número de serie", "Modelo", "Valor estimado", "Fecha de compra", "Estado", ...(isAdmin ? ["Acciones"] : [])]}>
+          <DataTable headings={["Número de serie", "Modelo", ...(isTechnician ? [] : ["Valor estimado", "Fecha de compra"]), "Estado", ...(isAdmin ? ["Acciones"] : [])]}>
             {visible.map((asset) => (
               <tr key={asset.id}>
-                <td><span className="table-primary mono-cell">{asset.serialNumber}</span></td>
+                <td><span className="copy-value"><span className="table-primary mono-cell telemetry-value">{asset.serialNumber}</span><CopyButton text={asset.serialNumber} label={`Copiar serie ${asset.serialNumber}`} /></span></td>
                 <td>{asset.model || "—"}</td>
-                <td>{asset.estimatedValue == null ? "—" : formatMoney(asset.estimatedValue)}</td>
-                <td>{asset.purchaseDate ?? "—"}</td>
+                {!isTechnician && <><td><span className="telemetry-value">{asset.estimatedValue == null ? "—" : formatCurrency(convertFromUsd(asset.estimatedValue, currency), currency)}</span></td>
+                <td className="telemetry-value">{asset.purchaseDate ?? "—"}</td></>}
                 <td><StatusTag value={asset.status} /></td>
                 {isAdmin && (
                   <td>
@@ -217,16 +219,14 @@ export function AssetsPage() {
               <button type="button" className="table-action" aria-label="Cerrar" onClick={() => setFormOpen(false)}><X size={17} /></button>
             </div>
             <form className="work-form" onSubmit={saveAsset}>
-              <FormField label="Número de serie">
-                <TextInput value={editing?.serialNumber ?? "Autogenerado por el sistema"} readOnly />
-              </FormField>
+              <div className="work-field"><span>Número de serie</span><div className="copy-value"><span className="serial-badge telemetry-value">{editing?.serialNumber ?? "Autogenerado por el sistema"}</span>{editing?.serialNumber && <CopyButton text={editing.serialNumber} label={`Copiar serie ${editing.serialNumber}`} />}</div></div>
               <FormField label="Modelo">
                 <TextInput value={form.model} onChange={(event) => setForm({ ...form, model: event.target.value })} required />
               </FormField>
               <div className="form-grid two-col">
                 <FormField label="Valor estimado">
                   <div className="money-entry">
-                    <TextInput type="number" min="0.01" step="0.01" value={form.estimatedValue} onChange={(event) => setForm({ ...form, estimatedValue: event.target.value })} required />
+                    <TextInput className="telemetry-value" type="number" min="0.01" step="0.01" value={form.estimatedValue} onChange={(event) => setForm({ ...form, estimatedValue: event.target.value })} required />
                     <SelectInput className="currency-entry-select" value={assetCurrency} onChange={(event) => setAssetCurrency(event.target.value as typeof assetCurrency)} aria-label="Moneda del valor estimado">
                       <option value="USD">USD</option>
                       <option value="COP">COP</option>
@@ -271,7 +271,7 @@ export function AssetsPage() {
                 <h2 id="asset-confirm-title">Confirmar cambios</h2>
               </div>
             </div>
-            <p id="asset-confirm-description" className="legal-notice-copy">¿Deseas guardar los cambios realizados en el activo {editing?.serialNumber}?</p>
+            <p id="asset-confirm-description" className="legal-notice-copy">¿Deseas guardar los cambios realizados en el activo <span className="copy-value"><span className="telemetry-value">{editing?.serialNumber}</span>{editing?.serialNumber && <CopyButton text={editing.serialNumber} label={`Copiar serie ${editing.serialNumber}`} />}</span>?</p>
             <div className="modal-actions">
               <Button variant="secondary" type="button" onClick={() => setConfirmEditOpen(false)}>Volver a editar</Button>
               <Button type="button" loading={saving} onClick={() => { setConfirmEditOpen(false); void persistAsset(); }}>Guardar cambios</Button>

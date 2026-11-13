@@ -4,7 +4,7 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
-  --paper: #f8fafc;
+  --paper: #f1f5f4;
   --surface: #ffffff;
   --ink: #0f172a;
   --muted: #64748b;
@@ -19,11 +19,11 @@
 
 html.dark {
   color-scheme: dark;
-  --paper: #0e1721;
-  --surface: #141f2b;
-  --ink: #e4ebf2;
-  --muted: #9aa8b6;
-  --line: #2a3948;
+  --paper: #0f172a;
+  --surface: #1e293b;
+  --ink: #cbd5e1;
+  --muted: #94a3b8;
+  --line: #334155;
   --forest: #176b59;
   --forest-deep: #0f453b;
   --mint: #b8e3cc;
@@ -39,19 +39,21 @@ html.dark {
 * { box-sizing: border-box; }
 
 html, body { min-height: 100%; }
+html { font-size: 16px; }
 
 body {
   margin: 0;
   background: var(--paper);
   color: var(--ink);
   font-family: var(--sans);
-  font-size: 14px;
+  font-size: 16px;
   -webkit-font-smoothing: antialiased;
+  transition: background-color 300ms ease-in-out, color 300ms ease-in-out;
 }
 
 a { color: inherit; text-decoration: none; }
 button, input { font: inherit; }
-button { color: inherit; }
+button { color: inherit; transition: background-color 300ms ease-in-out, color 300ms ease-in-out, border-color 300ms ease-in-out, box-shadow 300ms ease-in-out, transform 300ms ease-in-out; }
 
 /* Variables de color del Login Modo Claro (Armonizado con Esmeralda & Blanco) */
 :root {

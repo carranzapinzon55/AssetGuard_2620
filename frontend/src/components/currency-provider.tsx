@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useSyncExternalStore, type ReactNode } from "react";
+import { formatCurrency } from "@/lib/utils";
 
 export type Currency = "USD" | "COP";
 
@@ -57,11 +58,7 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
   }
 
   function formatMoney(usdAmount: number) {
-    const formattedAmount = new Intl.NumberFormat("en-US", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(convertFromUsd(usdAmount, currency));
-    return currency === "COP" ? `$ ${formattedAmount} COP` : `$ ${formattedAmount} US$`;
+    return formatCurrency(convertFromUsd(usdAmount, currency), currency);
   }
 
   return (

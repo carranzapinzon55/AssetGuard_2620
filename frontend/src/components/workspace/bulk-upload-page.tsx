@@ -4,8 +4,9 @@ import { useState, type ChangeEvent } from "react";
 import { CheckCircle2, FileSpreadsheet, FileUp, FileWarning, X } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import { useCurrency } from "@/components/currency-provider";
-import { Button, DataTable, Feedback, PageTitle, StatusTag } from "@/components/workspace/ui";
+import { Button, CopyButton, DataTable, Feedback, PageTitle, StatusTag } from "@/components/workspace/ui";
 import { UPLOAD_ASSETS } from "@/lib/operations";
+import { formatCurrency } from "@/lib/utils";
 import { errorMessage, queryGraphQL, type AssetItem } from "@/lib/workspace";
 
 type UploadResult = { uploadAssetsBulk: { importedCount: number; assets: AssetItem[] } };
@@ -28,7 +29,7 @@ function fileToBase64(file: File, onProgress: (progress: number) => void) {
 
 export function BulkUploadPage() {
   const { session } = useAuth();
-  const { formatMoney } = useCurrency();
+  const { currency, convertFromUsd } = useCurrency();
   const [file, setFile] = useState<File | null>(null);
   const [dragging, setDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -92,7 +93,7 @@ export function BulkUploadPage() {
         </div>}
         <div className="upload-actions"><span><FileWarning size={15} /> Si una fila falla, se revierte el lote completo.</span><Button onClick={upload} loading={uploading} disabled={!file}>{uploading ? "Procesando archivo" : "Importar activos"}</Button></div>
       </section>
-      {result && <section className="work-section results-section"><div className="section-toolbar"><div className="toolbar-title"><CheckCircle2 size={17} /><strong>Activos importados</strong><span>{result.importedCount}</span></div></div><DataTable headings={["Número de serie", "Modelo", "Valor estimado", "Fecha de compra", "Estado"]}>{result.assets.map((asset) => <tr key={asset.id}><td className="mono-cell">{asset.serialNumber}</td><td>{asset.model}</td><td>{asset.estimatedValue == null ? "—" : formatMoney(asset.estimatedValue)}</td><td>{asset.purchaseDate}</td><td><StatusTag value={asset.status} /></td></tr>)}</DataTable></section>}
+      {result && <section className="work-section results-section"><div className="section-toolbar"><div className="toolbar-title"><CheckCircle2 size={17} /><strong>Activos importados</strong><span>{result.importedCount}</span></div></div><DataTable headings={["Número de serie", "Modelo", "Valor estimado", "Fecha de compra", "Estado"]}>{result.assets.map((asset) => <tr key={asset.id}><td><span className="copy-value"><span className="mono-cell telemetry-value">{asset.serialNumber}</span><CopyButton text={asset.serialNumber} label={`Copiar serie ${asset.serialNumber}`} /></span></td><td>{asset.model}</td><td className="telemetry-value">{asset.estimatedValue == null ? "—" : formatCurrency(convertFromUsd(asset.estimatedValue, currency), currency)}</td><td className="telemetry-value">{asset.purchaseDate}</td><td><StatusTag value={asset.status} /></td></tr>)}</DataTable></section>}
     </div>
   );
 }
