@@ -27,8 +27,10 @@ public class AssetGraphQLController {
 
     @QueryMapping
     @PreAuthorize("isAuthenticated()")
-    public List<GraphQLViews.AssetView> assets() {
+    public List<GraphQLViews.AssetView> assets(@Argument Integer limit) {
+        int normalizedLimit = normalizeLimit(limit);
         return assetUseCase.findAll().stream()
+                .limit(normalizedLimit)
                 .map(GraphQLViews.AssetView::from)
                 .toList();
     }
@@ -42,6 +44,7 @@ public class AssetGraphQLController {
                 .estimatedValue(input.estimatedValue())
                 .status(input.status())
                 .purchaseDate(input.purchaseDate() == null ? null : LocalDate.parse(input.purchaseDate()))
+                .stockQuantity(input.stockQuantity())
                 .build();
         return GraphQLViews.AssetView.from(assetUseCase.register(asset));
     }
@@ -55,6 +58,7 @@ public class AssetGraphQLController {
                 .estimatedValue(input.estimatedValue())
                 .status(input.status())
                 .purchaseDate(input.purchaseDate() == null ? null : LocalDate.parse(input.purchaseDate()))
+                .stockQuantity(input.stockQuantity())
                 .build();
         return GraphQLViews.AssetView.from(assetUseCase.update(input.id(), changes));
     }
@@ -79,16 +83,31 @@ public class AssetGraphQLController {
             String model,
             Double estimatedValue,
             String status,
-            String purchaseDate) {
+            String purchaseDate,
+            Integer stockQuantity) {
     }
 
     public record BulkUploadInput(String filename, String contentBase64) {
     }
 
-        public record UpdateAssetInput(
-            Long id, String serialNumber, String model, Double estimatedValue, String status, String purchaseDate) {
+    public record UpdateAssetInput(
+            Long id,
+            String serialNumber,
+            String model,
+            Double estimatedValue,
+            String status,
+            String purchaseDate,
+            Integer stockQuantity) {
         }
 
     public record BulkUploadPayload(int importedCount, List<GraphQLViews.AssetView> assets) {
+    }
+
+    private int normalizeLimit(Integer limit) {
+        int value = limit == null ? 10 : limit;
+        if (value != 10 && value != 25 && value != 50) {
+            throw new IllegalArgumentException("limit must be one of 10, 25, or 50");
+        }
+        return value;
     }
 }

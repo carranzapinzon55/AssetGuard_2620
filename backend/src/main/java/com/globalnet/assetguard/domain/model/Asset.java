@@ -19,4 +19,5 @@ public class Asset {
     private Double estimatedValue;
     private String status;
     private LocalDate purchaseDate;
+    private Integer stockQuantity;
 }

@@ -17,6 +17,7 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
+import { motion } from "framer-motion";
 import { useAuth } from "@/components/auth-provider";
 import { WorkspaceTools } from "@/components/workspace/workspace-tools";
 import { CorporateFooter } from "@/components/corporate-footer";
@@ -196,7 +197,15 @@ export function ProtectedShell({ children }: { children: ReactNode }) {
           </div>
         </header>
 
-        <main className="page-content" key={pathname}>{children}</main>
+        <motion.main
+          className="page-content"
+          key={pathname}
+          initial={{ opacity: 0, y: 7 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.24, ease: "easeOut" }}
+        >
+          {children}
+        </motion.main>
         <CorporateFooter className="workspace-corporate-footer" />
       </div>
 
@@ -231,7 +240,7 @@ export function ProtectedShell({ children }: { children: ReactNode }) {
                 <Image src="/AssetGuard_2620_isotipo_app.png" alt="" width={34} height={34} className="object-contain" />
               </span>
               <div>
-                <strong>{session.user.fullName || session.user.email}</strong>
+                <strong>{session.user.fullName?.trim() || roleLabel(session.user.role) || "Usuario"}</strong>
                 <span>{session.user.email}</span>
               </div>
             </div>

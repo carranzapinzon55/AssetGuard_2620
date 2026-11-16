@@ -71,7 +71,9 @@ public class ExcelCsvAssetImporter implements AssetFileImporterPort {
                         get(values, headers, "serialnumber"),
                         get(values, headers, "model"),
                         get(values, headers, "estimatedvalue"),
-                        get(values, headers, "purchasedate"), null)));
+                        get(values, headers, "purchasedate"),
+                        get(values, headers, "stockquantity"),
+                        null)));
             }
             return rows;
         } catch (CsvValidationException exception) {
@@ -136,13 +138,20 @@ public class ExcelCsvAssetImporter implements AssetFileImporterPort {
     }
 
     private Asset toAsset(
-            int rowNumber, String serial, String model, String value, String date, Cell dateCell) {
+            int rowNumber,
+            String serial,
+            String model,
+            String value,
+            String date,
+            String stockQuantity,
+            Cell dateCell) {
         try {
             return Asset.builder()
                     .serialNumber(serial == null ? null : serial.trim())
                     .model(model == null ? null : model.trim())
                     .estimatedValue(value == null || value.isBlank() ? null : Double.valueOf(value.trim()))
                     .purchaseDate(parseDate(date, dateCell))
+                    .stockQuantity(parseStockQuantity(stockQuantity, rowNumber))
                     .status("AVAILABLE")
                     .build();
         } catch (NumberFormatException | DateTimeParseException exception) {
@@ -163,6 +172,9 @@ public class ExcelCsvAssetImporter implements AssetFileImporterPort {
             Cell modelCell = row.getCell(headers.get("model"));
             Cell valueCell = row.getCell(headers.get("estimatedvalue"));
             Cell dateCell = row.getCell(headers.get("purchasedate"));
+            Cell quantityCell = headers.containsKey("stockquantity")
+                    ? row.getCell(headers.get("stockquantity"))
+                    : null;
             String serial = formatter.formatCellValue(serialCell, evaluator);
             String model = formatter.formatCellValue(modelCell, evaluator);
 
@@ -171,11 +183,63 @@ public class ExcelCsvAssetImporter implements AssetFileImporterPort {
                     .model(model == null ? null : model.trim())
                     .estimatedValue(readNumericCell(valueCell, evaluator, rowNumber))
                     .purchaseDate(readDateCell(dateCell, formatter, evaluator, rowNumber))
+                    .stockQuantity(readIntegerCell(quantityCell, evaluator, rowNumber))
                     .status("AVAILABLE")
                     .build();
         } catch (NumberFormatException | DateTimeParseException exception) {
             throw new IllegalArgumentException(
                     "Error en la fila " + rowNumber + ": " + exception.getMessage(), exception);
+        }
+    }
+
+    private Integer readIntegerCell(Cell cell, FormulaEvaluator evaluator, int rowNumber) {
+        if (cell == null || cell.getCellType() == CellType.BLANK) {
+            return null;
+        }
+        CellType cellType = cell.getCellType();
+        double value;
+        if (cellType == CellType.FORMULA) {
+            CellValue evaluated = evaluator.evaluate(cell);
+            if (evaluated == null || evaluated.getCellType() == CellType.BLANK) {
+                return null;
+            }
+            if (evaluated.getCellType() == CellType.NUMERIC) {
+                value = evaluated.getNumberValue();
+            } else if (evaluated.getCellType() == CellType.STRING) {
+                value = parseStockQuantityValue(evaluated.getStringValue(), rowNumber);
+            } else {
+                throw rowError(rowNumber, "stockQuantity debe ser un entero");
+            }
+        } else if (cellType == CellType.NUMERIC) {
+            value = cell.getNumericCellValue();
+        } else if (cellType == CellType.STRING) {
+            value = parseStockQuantityValue(cell.getStringCellValue(), rowNumber);
+        } else {
+            throw rowError(rowNumber, "stockQuantity debe ser un entero");
+        }
+        if (!Double.isFinite(value) || value != Math.rint(value)
+                || value < Integer.MIN_VALUE || value > Integer.MAX_VALUE) {
+            throw rowError(rowNumber, "stockQuantity debe ser un entero");
+        }
+        return (int) value;
+    }
+
+    private Integer parseStockQuantity(String value, int rowNumber) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return Integer.valueOf(value.trim());
+        } catch (NumberFormatException exception) {
+            throw rowError(rowNumber, "stockQuantity debe ser un entero");
+        }
+    }
+
+    private double parseStockQuantityValue(String value, int rowNumber) {
+        try {
+            return Double.parseDouble(value.trim());
+        } catch (NumberFormatException exception) {
+            throw rowError(rowNumber, "stockQuantity debe ser un entero");
         }
     }
 

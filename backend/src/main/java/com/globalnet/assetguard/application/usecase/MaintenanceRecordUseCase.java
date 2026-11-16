@@ -13,6 +13,8 @@ import org.springframework.stereotype.Service;
 @Service
 public class MaintenanceRecordUseCase {
 
+    public static final double MAX_MAINTENANCE_COST_USD = 100_000.0;
+
     private final MaintenanceRecordRepositoryPort maintenanceRecordRepositoryPort;
     private final AssetRepositoryPort assetRepositoryPort;
     private final AuditLogUseCase auditLogUseCase;
@@ -35,6 +37,7 @@ public class MaintenanceRecordUseCase {
             throw new IllegalArgumentException(
                     "Maintenance record must reference an asset with an ID");
         }
+        validateCost(maintenanceRecord.getCost());
 
         Long assetId = maintenanceRecord.getAsset().getId();
         Asset asset = assetRepositoryPort.findById(assetId)
@@ -62,6 +65,53 @@ public class MaintenanceRecordUseCase {
 
     public List<MaintenanceRecord> findAll() {
         return maintenanceRecordRepositoryPort.findAll();
+    }
+
+    @Transactional
+    public MaintenanceRecord update(Long recordId, MaintenanceRecord changes) {
+        if (recordId == null || changes == null) {
+            throw new IllegalArgumentException("Maintenance record ID and changes are required");
+        }
+        MaintenanceRecord record = maintenanceRecordRepositoryPort.findById(recordId)
+                .orElseThrow(() -> new NoSuchElementException(
+                        "Maintenance record not found: " + recordId));
+        if (record.getEndDate() != null) {
+            throw new IllegalStateException("Completed maintenance records cannot be updated");
+        }
+        validateCost(changes.getCost());
+        if (changes.getProviderName() == null && changes.getReason() == null && changes.getCost() == null) {
+            throw new IllegalArgumentException("At least one maintenance field must be provided");
+        }
+        if (record.getAsset() == null || record.getAsset().getId() == null) {
+            throw new IllegalStateException("Maintenance record has no asset");
+        }
+        Asset asset = assetRepositoryPort.findById(record.getAsset().getId())
+                .orElseThrow(() -> new NoSuchElementException(
+                        "Asset not found: " + record.getAsset().getId()));
+        if (!"UNDER_MAINTENANCE".equals(asset.getStatus())) {
+            throw new IllegalStateException("Asset is not under maintenance");
+        }
+
+        if (changes.getProviderName() != null) {
+            record.setProviderName(changes.getProviderName());
+        }
+        if (changes.getReason() != null) {
+            record.setReason(changes.getReason());
+        }
+        if (changes.getCost() != null) {
+            record.setCost(changes.getCost());
+        }
+        MaintenanceRecord savedRecord = maintenanceRecordRepositoryPort.save(record);
+        auditLogUseCase.record("MAINTENANCE_UPDATED", "MAINTENANCE", savedRecord.getId(),
+                "Intervención actualizada para el activo " + asset.getId());
+        return savedRecord;
+    }
+
+    private void validateCost(Double cost) {
+        if (cost != null && (!Double.isFinite(cost) || cost < 0 || cost > MAX_MAINTENANCE_COST_USD)) {
+            throw new IllegalArgumentException(
+                    "Maintenance cost must be between 0 and 100000 USD");
+        }
     }
 
     @Transactional

@@ -60,6 +60,7 @@ public class AssetPersistenceAdapter implements AssetRepositoryPort {
                 .estimatedValue(entity.getEstimatedValue())
                 .status(entity.getStatus())
                 .purchaseDate(entity.getPurchaseDate())
+                .stockQuantity(entity.getStockQuantity())
                 .build();
     }
 
@@ -74,6 +75,7 @@ public class AssetPersistenceAdapter implements AssetRepositoryPort {
                 .estimatedValue(domain.getEstimatedValue())
                 .status(domain.getStatus())
                 .purchaseDate(domain.getPurchaseDate())
+                .stockQuantity(domain.getStockQuantity())
                 .build();
     }
 }

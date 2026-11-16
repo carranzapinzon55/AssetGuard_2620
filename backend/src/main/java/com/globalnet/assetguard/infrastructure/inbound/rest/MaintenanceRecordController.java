@@ -7,6 +7,8 @@ import com.globalnet.assetguard.infrastructure.inbound.rest.dto.MaintenanceRecor
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -37,5 +39,21 @@ public class MaintenanceRecordController {
 
         MaintenanceRecord savedRecord = maintenanceRecordUseCase.execute(maintenanceRecord);
         return ResponseEntity.status(HttpStatus.CREATED).body(savedRecord);
+    }
+
+    @PutMapping("/{recordId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'INSPECTOR')")
+    public ResponseEntity<MaintenanceRecord> updateMaintenanceRecord(
+            @PathVariable Long recordId,
+            @RequestBody MaintenanceRecordUpdateRequest request) {
+        MaintenanceRecord changes = MaintenanceRecord.builder()
+                .providerName(request.providerName())
+                .reason(request.reason())
+                .cost(request.cost())
+                .build();
+        return ResponseEntity.ok(maintenanceRecordUseCase.update(recordId, changes));
+    }
+
+    public record MaintenanceRecordUpdateRequest(String providerName, String reason, Double cost) {
     }
 }

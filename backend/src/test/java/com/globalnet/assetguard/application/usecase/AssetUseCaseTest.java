@@ -2,6 +2,7 @@ package com.globalnet.assetguard.application.usecase;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -67,5 +68,16 @@ class AssetUseCaseTest {
         assertEquals("LOANED", saved.getStatus());
         verify(auditLogUseCase).record(eq("ASSET_UPDATED"), eq("ASSET"), eq(12L), anyString());
         verify(auditLogUseCase).record(eq("ASSET_STATUS_CHANGED"), eq("ASSET"), eq(12L), anyString());
+    }
+
+    @Test
+    void registerRejectsEstimatedValuesBelowTenDollars() {
+        Asset request = Asset.builder()
+                .model("HP EliteBook")
+                .estimatedValue(9.99)
+                .status("AVAILABLE")
+                .build();
+
+        assertThrows(IllegalArgumentException.class, () -> assetUseCase.register(request));
     }
 }

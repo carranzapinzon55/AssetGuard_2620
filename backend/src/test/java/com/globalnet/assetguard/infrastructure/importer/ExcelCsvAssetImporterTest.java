@@ -46,6 +46,16 @@ class ExcelCsvAssetImporterTest {
     }
 
     @Test
+    void parsesOptionalStockQuantityFromCsv() throws Exception {
+        String csv = "model,estimatedValue,purchaseDate,stockQuantity\n"
+                + "Laptop,1200,2026-03-15,100\n";
+
+        List<AssetImportRow> rows = importer.parse("assets.csv", csv.getBytes(StandardCharsets.UTF_8));
+
+        assertEquals(100, rows.get(0).asset().getStockQuantity());
+    }
+
+    @Test
     void parsesXlsxRowsAndAssetFields() throws Exception {
         byte[] content;
         try (XSSFWorkbook workbook = new XSSFWorkbook(); ByteArrayOutputStream output = new ByteArrayOutputStream()) {

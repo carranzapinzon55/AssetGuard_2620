@@ -9,7 +9,7 @@ import { ASSETS_CATALOG_QUERY, USERS_QUERY } from "@/lib/operations";
 import { errorMessage, queryGraphQL, type AssetItem, type UserItem } from "@/lib/workspace";
 import { CopyButton, useModalFocus } from "@/components/workspace/ui";
 
-type PaletteResult = { label: string; detail: string; href: string; kind: "Activo" | "Técnico" };
+type PaletteResult = { label: string; detail: string; href: string; kind: "Activo" | "Usuario" };
 
 export function WorkspaceTools() {
   const { session } = useAuth();
@@ -22,7 +22,7 @@ export function WorkspaceTools() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [assets, setAssets] = useState<AssetItem[]>([]);
-  const [technicians, setTechnicians] = useState<UserItem[]>([]);
+  const [users, setUsers] = useState<UserItem[]>([]);
   const [selected, setSelected] = useState(0);
   const themeTransitionTimer = useRef<number | null>(null);
   const paletteRef = useModalFocus(open);
@@ -63,12 +63,12 @@ export function WorkspaceTools() {
     const assetRequest = queryGraphQL<{ assets: AssetItem[] }>(ASSETS_CATALOG_QUERY)
       .then((result) => { if (active) setAssets(result.assets); })
       .catch((requestError: unknown) => { if (active) setError(errorMessage(requestError)); });
-    const technicianRequest = session.user.role === "ADMIN"
+    const userRequest = session.user.role === "ADMIN"
       ? queryGraphQL<{ users: UserItem[] }>(USERS_QUERY)
-          .then((result) => { if (active) setTechnicians(result.users.filter((user) => user.role === "TECHNICIAN")); })
+          .then((result) => { if (active) setUsers(result.users); })
           .catch((requestError: unknown) => { if (active) setError(errorMessage(requestError)); })
       : Promise.resolve();
-    Promise.all([assetRequest, technicianRequest]).finally(() => { if (active) setLoading(false); });
+    Promise.all([assetRequest, userRequest]).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [open, session]);
 
@@ -82,13 +82,13 @@ export function WorkspaceTools() {
         href: `/workspace/assets?search=${encodeURIComponent(asset.serialNumber)}`,
         kind: "Activo" as const,
       })),
-    ...technicians
-      .filter((user) => `${user.fullName ?? ""} ${user.email}`.toLowerCase().includes(normalizedQuery))
+    ...users
+      .filter((user) => `${user.fullName ?? ""} ${user.email} ${user.role}`.toLowerCase().includes(normalizedQuery))
       .map((user) => ({
         label: user.fullName || user.email,
-        detail: user.email,
+        detail: `${user.email} · ${user.role}`,
         href: `/workspace/users?search=${encodeURIComponent(user.fullName || user.email)}`,
-        kind: "Técnico" as const,
+        kind: "Usuario" as const,
       })),
   ].slice(0, 8);
 
@@ -130,11 +130,11 @@ export function WorkspaceTools() {
             if (event.key === "ArrowDown") { event.preventDefault(); setSelected((value) => Math.min(value + 1, results.length - 1)); }
             if (event.key === "ArrowUp") { event.preventDefault(); setSelected((value) => Math.max(value - 1, 0)); }
             if (event.key === "Enter") { event.preventDefault(); selectResult(selected); }
-          }} placeholder="Buscar por serie o técnico…" className="h-14 min-w-0 flex-1 bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400 dark:text-slate-100" aria-label="Buscar activos o técnicos" />
+          }} placeholder="Buscar por serie, activo o usuario…" className="h-14 min-w-0 flex-1 bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400 dark:text-slate-100" aria-label="Buscar activos o usuarios" />
           <kbd className="rounded border border-slate-200 px-1.5 py-1 text-[10px] text-slate-500 dark:border-slate-700 dark:text-slate-400">ESC</kbd>
         </div>
         <div className="max-h-[min(60vh,420px)] overflow-y-auto p-2" aria-live="polite">
-          {loading ? <p className="px-3 py-8 text-center text-sm text-slate-500">Buscando en el inventario…</p>
+          {loading ? <p className="px-3 py-8 text-center text-sm text-slate-500">Buscando activos y usuarios…</p>
             : error ? <p role="alert" className="px-3 py-8 text-center text-sm text-rose-700 dark:text-rose-300">{error}</p>
               : normalizedQuery.length < 2 ? <p className="px-3 py-8 text-center text-sm text-slate-500">Escribe al menos 2 caracteres para buscar.</p>
                 : results.length === 0 ? <p className="px-3 py-8 text-center text-sm text-slate-500">Sin resultados para esta búsqueda.</p>

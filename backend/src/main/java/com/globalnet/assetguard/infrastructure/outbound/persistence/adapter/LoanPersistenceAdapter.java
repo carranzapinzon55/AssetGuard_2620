@@ -8,6 +8,7 @@ import com.globalnet.assetguard.domain.model.User;
 import com.globalnet.assetguard.domain.ports.output.LoanRepositoryPort;
 import com.globalnet.assetguard.infrastructure.outbound.persistence.AssetJpaRepository;
 import com.globalnet.assetguard.infrastructure.outbound.persistence.LoanJpaRepository;
+import com.globalnet.assetguard.infrastructure.outbound.persistence.MaintenanceRecordJpaRepository;
 import com.globalnet.assetguard.infrastructure.outbound.persistence.UserEntity;
 import com.globalnet.assetguard.infrastructure.outbound.persistence.entity.AssetEntity;
 import com.globalnet.assetguard.infrastructure.outbound.persistence.entity.LoanEntity;
@@ -25,12 +26,15 @@ public class LoanPersistenceAdapter implements LoanRepositoryPort {
 
     private final LoanJpaRepository loanJpaRepository;
     private final AssetJpaRepository assetJpaRepository;
+    private final MaintenanceRecordJpaRepository maintenanceRecordJpaRepository;
 
     public LoanPersistenceAdapter(
             LoanJpaRepository loanJpaRepository,
-            AssetJpaRepository assetJpaRepository) {
+            AssetJpaRepository assetJpaRepository,
+            MaintenanceRecordJpaRepository maintenanceRecordJpaRepository) {
         this.loanJpaRepository = loanJpaRepository;
         this.assetJpaRepository = assetJpaRepository;
+        this.maintenanceRecordJpaRepository = maintenanceRecordJpaRepository;
     }
 
     @Override
@@ -104,10 +108,22 @@ public class LoanPersistenceAdapter implements LoanRepositoryPort {
 
     @Override
     public LoanDashboardMetrics calculateDashboardMetrics(LocalDateTime startDate, LocalDateTime endDate) {
+        java.time.LocalDate start = startDate == null ? null : startDate.toLocalDate();
+        java.time.LocalDate end = endDate == null ? null : endDate.toLocalDate();
+        java.math.BigDecimal maintenanceCosts = java.math.BigDecimal.valueOf(
+                Optional.ofNullable(maintenanceRecordJpaRepository.sumCostsForStartDateRange(start, end))
+                        .orElse(0.0));
+        long availableAssets = assetJpaRepository.countByStatusIn(List.of("AVAILABLE"));
         return new LoanDashboardMetrics(
             loanJpaRepository.sumEstimatedLossValue(startDate, endDate),
+            maintenanceCosts,
             Optional.ofNullable(loanJpaRepository.onTimeReturnPercentage(startDate, endDate)).orElse(0.0),
-            assetJpaRepository.countByStatusIn(List.of("LOANED", "ON_LOAN")));
+            assetJpaRepository.countByStatusIn(List.of("LOANED", "ON_LOAN")),
+            assetJpaRepository.count(),
+            availableAssets,
+            assetJpaRepository.countByStatusIn(List.of("UNDER_MAINTENANCE", "MAINTENANCE")),
+            assetJpaRepository.countByStatusIn(List.of("LOST")),
+            assetJpaRepository.summarizeByModel());
     }
 
     private Loan toDomain(LoanEntity entity) {
@@ -133,6 +149,7 @@ public class LoanPersistenceAdapter implements LoanRepositoryPort {
                 .estimatedValue(entity.getAsset().getEstimatedValue())
                 .status(entity.getAsset().getStatus())
                 .purchaseDate(entity.getAsset().getPurchaseDate())
+                .stockQuantity(entity.getAsset().getStockQuantity())
                 .build();
         User inspector = entity.getInspector() == null
             ? null

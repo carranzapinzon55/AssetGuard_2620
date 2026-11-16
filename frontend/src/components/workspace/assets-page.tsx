@@ -2,17 +2,16 @@
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
-import { Boxes, ChevronLeft, ChevronRight, Edit3, Plus, Search, X } from "lucide-react";
+import { Boxes, Edit3, Plus, Search, X } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import { useCurrency } from "@/components/currency-provider";
-import { Button, CopyButton, DataTable, EmptyState, Feedback, FormField, LoadingRows, PageTitle, SelectInput, StatusTag, TextInput, useEscapeKey, useModalFocus } from "@/components/workspace/ui";
+import { Button, CopyButton, CurrencyDisplay, DataTable, EmptyState, Feedback, FormField, LoadingRows, PageTitle, PaginationControls, SelectInput, StatusTag, TextInput, useEscapeKey, useModalFocus } from "@/components/workspace/ui";
 import { ASSETS_CATALOG_QUERY, ASSETS_QUERY, CREATE_ASSET, UPDATE_ASSET } from "@/lib/operations";
-import { formatCurrency } from "@/lib/utils";
 import { errorMessage, queryGraphQL, type AssetItem } from "@/lib/workspace";
 
 type AssetsResult = { assets: AssetItem[] };
 type AssetResult = { createAsset: AssetItem; updateAsset: AssetItem };
-const pageSize = 8;
+const MAX_ASSETS = 50;
 const blankAsset = { model: "", estimatedValue: "", purchaseDate: "", status: "AVAILABLE" };
 
 function getLocalTodayIso(): string {
@@ -37,6 +36,7 @@ export function AssetsPage() {
   const [query, setQuery] = useState(() => searchParams.get("search") ?? "");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(10);
   const [editing, setEditing] = useState<AssetItem | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [form, setForm] = useState(blankAsset);
@@ -61,7 +61,7 @@ export function AssetsPage() {
 
   useEffect(() => {
     let active = true;
-    queryGraphQL<AssetsResult>(isTechnician ? ASSETS_CATALOG_QUERY : ASSETS_QUERY)
+    queryGraphQL<AssetsResult>(isTechnician ? ASSETS_CATALOG_QUERY : ASSETS_QUERY, { limit: MAX_ASSETS })
       .then((result) => { if (active) setAssets(result.assets); })
       .catch((error: unknown) => { if (active) setFeedback({ error: errorMessage(error) }); })
       .finally(() => { if (active) setLoading(false); });
@@ -73,8 +73,12 @@ export function AssetsPage() {
     const matchesStatus = statusFilter === "ALL" || asset.status === statusFilter;
     return matchesText && matchesStatus;
   }), [assets, query, statusFilter]);
-  const pages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const visible = filtered.slice(page * pageSize, (page + 1) * pageSize);
+
+  function changePageSize(nextPageSize: number) {
+    setPageSize(nextPageSize);
+    setPage(0);
+  }
 
   function openForm(asset?: AssetItem) {
     setEditing(asset ?? null);
@@ -101,8 +105,9 @@ export function AssetsPage() {
     }
 
     const numericValue = Number(form.estimatedValue);
-    if (!form.estimatedValue || Number.isNaN(numericValue) || numericValue <= 0) {
-      setFeedback({ error: "El valor estimado debe ser mayor a cero." });
+    if (!form.estimatedValue || !Number.isFinite(numericValue)
+        || convertToUsd(numericValue, assetCurrency) < 10) {
+      setFeedback({ error: "El valor estimado debe ser de al menos 10 USD." });
       return;
     }
 
@@ -176,9 +181,12 @@ export function AssetsPage() {
           <DataTable headings={["Número de serie", "Modelo", ...(isTechnician ? [] : ["Valor estimado", "Fecha de compra"]), "Estado", ...(isAdmin ? ["Acciones"] : [])]}>
             {visible.map((asset) => (
               <tr key={asset.id}>
-                <td><span className="copy-value"><span className="table-primary mono-cell telemetry-value">{asset.serialNumber}</span><CopyButton text={asset.serialNumber} label={`Copiar serie ${asset.serialNumber}`} /></span></td>
+                <td>
+                  <span className="copy-value"><span className="table-primary mono-cell telemetry-value font-mono">{asset.serialNumber}</span><CopyButton text={asset.serialNumber} label={`Copiar serie ${asset.serialNumber}`} /></span>
+                  <small className="table-secondary id-copy-line font-mono">ID <span>{asset.id}</span><CopyButton className="inline-copy" text={asset.id} label={`Copiar ID de ${asset.serialNumber}`} /></small>
+                </td>
                 <td>{asset.model || "—"}</td>
-                {!isTechnician && <><td><span className="telemetry-value">{asset.estimatedValue == null ? "—" : formatCurrency(convertFromUsd(asset.estimatedValue, currency), currency)}</span></td>
+                {!isTechnician && <><td>{asset.estimatedValue == null ? "—" : <CurrencyDisplay usdAmount={asset.estimatedValue} />}</td>
                 <td className="telemetry-value">{asset.purchaseDate ?? "—"}</td></>}
                 <td><StatusTag value={asset.status} /></td>
                 {isAdmin && (
@@ -198,14 +206,7 @@ export function AssetsPage() {
             ))}
           </DataTable>
         )}
-        <div className="table-footer">
-          <span>Mostrando {filtered.length ? page * pageSize + 1 : 0}–{Math.min((page + 1) * pageSize, filtered.length)} de {filtered.length}</span>
-          <div className="pagination">
-            <button type="button" className="table-action" onClick={() => setPage((value) => Math.max(0, value - 1))} disabled={page === 0} aria-label="Página anterior"><ChevronLeft size={16} /></button>
-            <span>{page + 1} / {pages}</span>
-            <button type="button" className="table-action" onClick={() => setPage((value) => Math.min(pages - 1, value + 1))} disabled={page >= pages - 1} aria-label="Página siguiente"><ChevronRight size={16} /></button>
-          </div>
-        </div>
+        <PaginationControls currentPage={page} totalItems={filtered.length} pageSize={pageSize} onPageChange={setPage} onPageSizeChange={changePageSize} itemLabel="activos" />
       </section>
 
       {formOpen && (
@@ -226,7 +227,7 @@ export function AssetsPage() {
               <div className="form-grid two-col">
                 <FormField label="Valor estimado">
                   <div className="money-entry">
-                    <TextInput className="telemetry-value" type="number" min="0.01" step="0.01" value={form.estimatedValue} onChange={(event) => setForm({ ...form, estimatedValue: event.target.value })} required />
+                    <TextInput className="telemetry-value" type="number" min={assetCurrency === "COP" ? "40000" : "10"} step="0.01" value={form.estimatedValue} onChange={(event) => setForm({ ...form, estimatedValue: event.target.value })} required />
                     <SelectInput className="currency-entry-select" value={assetCurrency} onChange={(event) => setAssetCurrency(event.target.value as typeof assetCurrency)} aria-label="Moneda del valor estimado">
                       <option value="USD">USD</option>
                       <option value="COP">COP</option>

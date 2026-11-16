@@ -1,6 +1,9 @@
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode, type Ref } from "react";
 import { AlertCircle, Check, CheckCircle2, Copy, LoaderCircle, X } from "lucide-react";
+import { motion } from "framer-motion";
+import { useCurrency } from "@/components/currency-provider";
 import { statusLabel } from "@/lib/localization";
+import { formatCurrency } from "@/lib/utils";
 
 export function useEscapeKey(active: boolean, onEscape: () => void) {
   useEffect(() => {
@@ -135,20 +138,26 @@ export function Dialog({
   if (!open) return null;
 
   return (
-    <div
+    <motion.div
       className="modal-backdrop"
       role="presentation"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.18 }}
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
     >
-      <section
+      <motion.section
         ref={dialogRef}
         tabIndex={-1}
         className="work-modal detail-dialog"
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
+        initial={{ opacity: 0, y: 8, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.2, ease: "easeOut" }}
       >
         <div className="modal-heading">
           <div>
@@ -160,8 +169,8 @@ export function Dialog({
           </button>
         </div>
         {children}
-      </section>
-    </div>
+      </motion.section>
+    </motion.div>
   );
 }
 
@@ -194,14 +203,17 @@ export function ConfirmDialog({
   if (!open) return null;
 
   return (
-    <div
+    <motion.div
       className="modal-backdrop confirmation-backdrop"
       role="presentation"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.18 }}
       onMouseDown={(event) => {
         if (!loading && event.target === event.currentTarget) onCancel();
       }}
     >
-      <section
+      <motion.section
         ref={dialogRef}
         tabIndex={-1}
         className="work-modal confirm-dialog"
@@ -209,6 +221,9 @@ export function ConfirmDialog({
         aria-modal="true"
         aria-labelledby={titleId}
         aria-describedby={messageId}
+        initial={{ opacity: 0, y: 8, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.2, ease: "easeOut" }}
       >
         <div className="modal-heading">
           <div>
@@ -216,7 +231,7 @@ export function ConfirmDialog({
             <h2 id={titleId}>{title}</h2>
           </div>
         </div>
-        <div id={messageId} className="legal-notice-copy">{message}</div>
+        <div id={messageId} className="legal-notice-copy confirm-message">{message}</div>
         <div className="modal-actions">
           <Button variant="secondary" type="button" disabled={loading} onClick={onCancel}>
             {cancelLabel}
@@ -225,8 +240,8 @@ export function ConfirmDialog({
             {confirmLabel}
           </Button>
         </div>
-      </section>
-    </div>
+      </motion.section>
+    </motion.div>
   );
 }
 
@@ -246,6 +261,107 @@ export function Feedback({ error, success }: { error?: string; success?: string 
   if (error) return <div className="work-feedback error" role="alert"><AlertCircle size={16} />{error}</div>;
   if (success) return <div className="work-feedback success" role="status"><CheckCircle2 size={16} />{success}</div>;
   return null;
+}
+
+export function CurrencyDisplay({ usdAmount }: { usdAmount: number }) {
+  const { currency, convertFromUsd } = useCurrency();
+  const primaryAmount = convertFromUsd(usdAmount, currency);
+  const secondaryCurrency = currency === "USD" ? "COP" : "USD";
+  const secondaryAmount = convertFromUsd(usdAmount, secondaryCurrency);
+  return (
+    <span className={`currency-display primary-${currency.toLowerCase()}`}>
+      <strong className="currency-primary telemetry-value font-mono">{formatCurrency(primaryAmount, currency)}</strong>
+      <small className="currency-secondary text-slate-500 telemetry-value font-mono">{formatCurrency(secondaryAmount, secondaryCurrency)}</small>
+    </span>
+  );
+}
+
+export function PaginationControls({
+  currentPage,
+  totalItems,
+  pageSize,
+  onPageChange,
+  onPageSizeChange,
+  loading = false,
+  itemLabel = "resultados",
+}: {
+  currentPage: number;
+  totalItems: number;
+  pageSize: number;
+  onPageChange: (page: number) => void;
+  onPageSizeChange: (pageSize: number) => void;
+  loading?: boolean;
+  itemLabel?: string;
+}) {
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+  const firstVisible = totalItems === 0 ? 0 : currentPage * pageSize + 1;
+  const lastVisible = Math.min((currentPage + 1) * pageSize, totalItems);
+  const pageStart = Math.max(0, Math.min(currentPage - 2, totalPages - 5));
+  const pages = Array.from({ length: Math.min(totalPages, 5) }, (_, index) => pageStart + index);
+
+  return (
+    <div className="table-footer pagination-footer">
+      <span>{firstVisible}–{lastVisible} de {totalItems} {itemLabel}</span>
+      <label className="pagination page-size-selector">
+        Ítems por página
+        <SelectInput
+          value={pageSize}
+          onChange={(event) => onPageSizeChange(Number(event.target.value))}
+          aria-label="Ítems por página"
+        >
+          {[10, 25, 50].map((size) => <option key={size} value={size}>{size}</option>)}
+        </SelectInput>
+      </label>
+      <nav className="pagination page-number-controls" aria-label="Paginación">
+        <button type="button" className="page-number-button" onClick={() => onPageChange(0)} disabled={loading || currentPage === 0} aria-label="Primera página">{"<<"}</button>
+        <button type="button" className="page-number-button" onClick={() => onPageChange(Math.max(0, currentPage - 1))} disabled={loading || currentPage === 0} aria-label="Página anterior">{"<"}</button>
+        {pages.map((page) => (
+          <button
+            type="button"
+            className={`page-number-button ${page === currentPage ? "active" : ""}`}
+            key={page}
+            onClick={() => onPageChange(page)}
+            disabled={loading}
+            aria-label={`Página ${page + 1}`}
+            aria-current={page === currentPage ? "page" : undefined}
+          >
+            {page + 1}
+          </button>
+        ))}
+        <button type="button" className="page-number-button" onClick={() => onPageChange(Math.min(totalPages - 1, currentPage + 1))} disabled={loading || currentPage >= totalPages - 1} aria-label="Página siguiente">{">"}</button>
+        <button type="button" className="page-number-button" onClick={() => onPageChange(totalPages - 1)} disabled={loading || currentPage >= totalPages - 1} aria-label="Última página">{">>"}</button>
+      </nav>
+    </div>
+  );
+}
+
+export function InsightCard({ label, value, description, progress, detail }: {
+  label: string;
+  value: string | number;
+  description: string;
+  progress: number;
+  detail: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const boundedProgress = Math.max(0, Math.min(100, progress));
+
+  return (
+    <>
+      <button className="insight-card" type="button" onClick={() => setOpen(true)} aria-haspopup="dialog">
+        <span className="work-eyebrow">{label}</span>
+        <strong className="insight-value telemetry-value">{value}</strong>
+        <span className="insight-track" aria-hidden="true"><i style={{ width: `${boundedProgress}%` }} /></span>
+        <span className="insight-description">{description}</span>
+        <span className="insight-link">VER DESGLOSE ↗</span>
+      </button>
+      <Dialog open={open} title={label} eyebrow="INDICADOR · RESUMEN" onClose={() => setOpen(false)}>
+        <div className="metric-detail">
+          <strong className="metric-detail-value telemetry-value">{value}</strong>
+          <p>{detail}</p>
+        </div>
+      </Dialog>
+    </>
+  );
 }
 
 export function LoadingRows({ label = "Cargando datos" }: { label?: string }) {
@@ -280,13 +396,14 @@ export function FormField({ label, children, className = "" }: { label: string; 
   return <label className={`work-field ${className}`}><span>{label}</span>{children}</label>;
 }
 
-export function TextInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
-  const { className = "", ...inputProps } = props;
-  return <input className={`work-input ${className}`.trim()} {...inputProps} />;
+export function TextInput(props: React.InputHTMLAttributes<HTMLInputElement> & { inputRef?: Ref<HTMLInputElement> }) {
+  const { className = "", inputRef, ...inputProps } = props;
+  return <input ref={inputRef} className={`work-input ${className}`.trim()} {...inputProps} />;
 }
 
-export function SelectInput(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
-  return <select className="work-input" {...props} />;
+export function SelectInput(props: React.SelectHTMLAttributes<HTMLSelectElement> & { selectRef?: Ref<HTMLSelectElement> }) {
+  const { selectRef, ...selectProps } = props;
+  return <select ref={selectRef} className="work-input" {...selectProps} />;
 }
 
 export function InlineActions({ children }: { children: ReactNode }) {

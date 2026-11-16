@@ -63,6 +63,7 @@ public class MaintenanceRecordPersistenceAdapter implements MaintenanceRecordRep
                 .estimatedValue(entity.getAsset().getEstimatedValue())
                 .status(entity.getAsset().getStatus())
                 .purchaseDate(entity.getAsset().getPurchaseDate())
+                .stockQuantity(entity.getAsset().getStockQuantity())
                 .build();
 
         return MaintenanceRecord.builder()

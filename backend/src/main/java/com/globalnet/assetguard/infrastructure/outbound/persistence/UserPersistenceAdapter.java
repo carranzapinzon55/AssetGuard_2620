@@ -53,6 +53,8 @@ public class UserPersistenceAdapter implements UserRepositoryPort {
                 .password(entity.getPassword())
                 .role(entity.getRole())
                 .status(entity.getStatus())
+                .passwordResetToken(entity.getPasswordResetToken())
+                .passwordResetTokenExpiresAt(entity.getPasswordResetTokenExpiresAt())
                 .build();
     }
 
@@ -67,6 +69,8 @@ public class UserPersistenceAdapter implements UserRepositoryPort {
                 .password(domain.getPassword())
                 .role(domain.getRole())
                 .status(domain.getStatus())
+                .passwordResetToken(domain.getPasswordResetToken())
+                .passwordResetTokenExpiresAt(domain.getPasswordResetTokenExpiresAt())
                 .build();
     }
 }

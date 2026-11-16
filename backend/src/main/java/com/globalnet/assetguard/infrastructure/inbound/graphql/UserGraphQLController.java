@@ -20,8 +20,10 @@ public class UserGraphQLController {
 
     @QueryMapping
     @PreAuthorize("hasRole('ADMIN')")
-    public List<GraphQLViews.UserView> users() {
+    public List<GraphQLViews.UserView> users(@Argument Integer limit) {
+        int normalizedLimit = normalizeLimit(limit);
         return registerUserUseCase.findAll().stream()
+                .limit(normalizedLimit)
                 .map(GraphQLViews.UserView::from)
                 .toList();
     }
@@ -58,5 +60,13 @@ public class UserGraphQLController {
 
     public record UpdateUserInput(
             Long id, String fullName, String email, String password, String role, Boolean status) {
+    }
+
+    private int normalizeLimit(Integer limit) {
+        int value = limit == null ? 10 : limit;
+        if (value != 10 && value != 25 && value != 50) {
+            throw new IllegalArgumentException("limit must be one of 10, 25, or 50");
+        }
+        return value;
     }
 }

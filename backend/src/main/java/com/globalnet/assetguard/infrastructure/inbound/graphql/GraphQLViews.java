@@ -51,7 +51,8 @@ public final class GraphQLViews {
             String model,
             Double estimatedValue,
             String status,
-            String purchaseDate) {
+            String purchaseDate,
+            Integer stockQuantity) {
         public static AssetView from(Asset asset) {
             return asset == null
                     ? null
@@ -61,7 +62,8 @@ public final class GraphQLViews {
                             asset.getModel(),
                             asset.getEstimatedValue(),
                             asset.getStatus(),
-                            asset.getPurchaseDate() == null ? null : asset.getPurchaseDate().toString());
+                            asset.getPurchaseDate() == null ? null : asset.getPurchaseDate().toString(),
+                            asset.getStockQuantity());
         }
     }
 

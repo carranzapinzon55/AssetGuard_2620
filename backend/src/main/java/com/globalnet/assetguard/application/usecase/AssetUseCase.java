@@ -29,6 +29,8 @@ public class AssetUseCase {
         if (asset == null) {
             throw new IllegalArgumentException("Asset must not be null");
         }
+        validateEstimatedValue(asset.getEstimatedValue());
+        validateStockQuantity(asset.getStockQuantity());
 
         if (asset.getStatus() == null || !ALLOWED_STATUSES.contains(asset.getStatus())) {
             throw new IllegalArgumentException(
@@ -59,9 +61,14 @@ public class AssetUseCase {
         if (changes.getStatus() == null || !ALLOWED_STATUSES.contains(changes.getStatus())) {
             throw new IllegalArgumentException("Asset status must be a recognized lifecycle status");
         }
+        validateEstimatedValue(changes.getEstimatedValue());
+        validateStockQuantity(changes.getStockQuantity());
         String previousStatus = existing.getStatus();
         existing.setModel(changes.getModel());
         existing.setEstimatedValue(changes.getEstimatedValue());
+        if (changes.getStockQuantity() != null) {
+            existing.setStockQuantity(changes.getStockQuantity());
+        }
         existing.setPurchaseDate(changes.getPurchaseDate());
         existing.setStatus(changes.getStatus());
         Asset savedAsset = assetRepositoryPort.save(existing);
@@ -98,5 +105,18 @@ public class AssetUseCase {
         }
         String shortId = UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase(Locale.ROOT);
         return "SN-" + brand + "-" + shortId;
+    }
+
+    private void validateEstimatedValue(Double estimatedValue) {
+        if (estimatedValue != null
+                && (!Double.isFinite(estimatedValue) || estimatedValue < 10.0)) {
+            throw new IllegalArgumentException("Asset estimatedValue must be at least 10 USD");
+        }
+    }
+
+    private void validateStockQuantity(Integer stockQuantity) {
+        if (stockQuantity != null && stockQuantity < 0) {
+            throw new IllegalArgumentException("Asset stockQuantity must not be negative");
+        }
     }
 }

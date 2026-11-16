@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useState, type KeyboardEvent } from "react";
+import { matchesSearch } from "@/lib/utils";
 
 export type ComboboxOption = {
   value: string;
@@ -35,9 +36,7 @@ export function Combobox({
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
   const selectedOption = options.find((option) => option.value === value);
-  const filteredOptions = options.filter((option) =>
-    option.label.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()),
-  );
+  const filteredOptions = options.filter((option) => matchesSearch(option.label, query));
 
   function choose(option: ComboboxOption) {
     onValueChange(option.value);

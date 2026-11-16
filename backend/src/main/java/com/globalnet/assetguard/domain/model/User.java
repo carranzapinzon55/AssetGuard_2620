@@ -1,5 +1,6 @@
 package com.globalnet.assetguard.domain.model;
 
+import java.time.LocalDateTime;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.NoArgsConstructor;
@@ -18,4 +19,6 @@ public class User {
     private String password;
     private String role;
     private Boolean status;
+    private String passwordResetToken;
+    private LocalDateTime passwordResetTokenExpiresAt;
 }

@@ -38,4 +38,7 @@ public class AssetEntity {
 
     @Column(name = "purchase_date")
     private LocalDate purchaseDate;
+
+    @Column(name = "stock_quantity")
+    private Integer stockQuantity;
 }

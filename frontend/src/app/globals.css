@@ -1316,3 +1316,113 @@ html.dark .input-wrap input:-webkit-autofill:focus {
   caret-color: #f8fafc !important;
   transition: background-color 99999s ease-in-out 0s !important;
 }
+
+html:not(.dark) .workspace .topbar {
+  border-bottom-color: #e2e8f0;
+  background: rgb(255 255 255 / 88%);
+  color: #475569;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+html:not(.dark) .workspace .topbar .breadcrumb,
+html:not(.dark) .workspace .topbar .breadcrumb > span:first-child { color: #475569; }
+html:not(.dark) .workspace .topbar .breadcrumb strong { color: #0f172a; }
+html:not(.dark) .workspace .topbar .breadcrumb-separator { color: #94a3b8; }
+
+html:not(.dark) .workspace .modal-backdrop {
+  background: rgb(15 23 42 / 45%);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+html:not(.dark) .workspace .work-modal {
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  color: #0f172a;
+  box-shadow: 0 20px 50px rgb(15 23 42 / 12%);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+html:not(.dark) .workspace .work-modal .modal-heading h2 { color: #0f172a; }
+html:not(.dark) .workspace .work-modal .work-field,
+html:not(.dark) .workspace .work-modal .work-field > span { color: #334155; }
+html:not(.dark) .workspace .work-modal .work-eyebrow,
+html:not(.dark) .workspace .work-modal .form-hint,
+html:not(.dark) .workspace .work-modal .drawer-unavailable,
+html:not(.dark) .workspace .work-modal .drawer-asset-summary > span:last-child { color: #64748b; }
+
+html:not(.dark) .workspace .work-modal .work-input,
+html:not(.dark) .workspace .work-modal .work-textarea,
+html:not(.dark) .workspace .work-modal .combobox-input,
+html:not(.dark) .workspace .work-modal .search-control {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+html:not(.dark) .workspace .work-modal .search-control input { color: #0f172a; }
+html:not(.dark) .workspace .work-modal .work-input::placeholder,
+html:not(.dark) .workspace .work-modal .search-control input::placeholder { color: #64748b; }
+html:not(.dark) .workspace .work-modal .modal-actions { border-color: #e2e8f0; }
+html:not(.dark) .workspace .work-modal .drawer-asset-summary {
+  border-color: #e2e8f0;
+  background: #f8fafc;
+}
+html:not(.dark) .workspace .work-modal .drawer-asset-photo { background: #e2e8f0; color: #475569; }
+html:not(.dark) .workspace .work-modal .drawer-asset-summary > strong { color: #0f172a; }
+
+html.dark .workspace .topbar {
+  border-bottom-color: #334155;
+  background: #111827;
+  color: #cbd5e1;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+html.dark .workspace .topbar .breadcrumb { color: #94a3b8; }
+html.dark .workspace .topbar .breadcrumb strong { color: #f1f5f9; }
+html.dark .workspace .topbar .breadcrumb-separator { color: #64748b; }
+
+html.dark .workspace .modal-backdrop {
+  background: rgb(2 6 23 / 78%);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+html.dark .workspace .work-modal {
+  border: 1px solid #334155;
+  background: #0f172a;
+  color: #f1f5f9;
+  box-shadow: 0 26px 70px rgb(0 0 0 / 45%);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+html.dark .workspace .work-modal .modal-heading h2 { color: #f1f5f9; }
+html.dark .workspace .work-modal .work-field,
+html.dark .workspace .work-modal .work-field > span { color: #cbd5e1; }
+html.dark .workspace .work-modal .work-eyebrow,
+html.dark .workspace .work-modal .form-hint,
+html.dark .workspace .work-modal .drawer-unavailable,
+html.dark .workspace .work-modal .drawer-asset-summary > span:last-child { color: #94a3b8; }
+
+html.dark .workspace .work-modal .work-input,
+html.dark .workspace .work-modal .work-textarea,
+html.dark .workspace .work-modal .combobox-input,
+html.dark .workspace .work-modal .search-control {
+  border-color: #334155;
+  background: #1e293b;
+  color: #f1f5f9;
+}
+
+html.dark .workspace .work-modal .search-control input { color: #f1f5f9; }
+html.dark .workspace .work-modal .modal-actions { border-color: #334155; }
+html.dark .workspace .work-modal .drawer-asset-summary { border-color: #334155; background: #1e293b; }
+html.dark .workspace .work-modal .drawer-asset-photo { background: #0f172a; color: #94a3b8; }
+html.dark .workspace .work-modal .drawer-asset-summary > strong { color: #f1f5f9; }
+
+html.dark .workspace .currency-display.primary-usd .currency-primary { color: #f8fafc; }
+html.dark .workspace .currency-display.primary-cop .currency-primary { color: #5eead4; }
+html.dark .workspace .currency-display .currency-secondary { color: #94a3b8; }

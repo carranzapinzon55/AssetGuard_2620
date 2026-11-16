@@ -72,7 +72,7 @@ class BulkUploadAssetsUseCaseIntegrationTest {
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
                 () -> bulkUploadAssetsUseCase.execute("assets.csv", csv.getBytes(StandardCharsets.UTF_8)));
 
-        assertEquals("Error en la fila 3: estimatedValue debe ser un valor numérico positivo",
+        assertEquals("Error en la fila 3: estimatedValue debe ser un valor numérico de al menos 10 USD",
                 exception.getMessage());
         assertEquals(0, assetRepositoryPort.findAll().size());
     }
@@ -130,12 +130,31 @@ class BulkUploadAssetsUseCaseIntegrationTest {
                 today.minusDays(2), today.atTime(10, 0));
         saveLoan(technician, fieldAsset, Loan.Status.APPROVED, null,
                 today.plusDays(2), null);
+        jdbcTemplate.update(
+                "insert into maintenance_records (asset_id, reason, cost, start_date) values (?, ?, ?, ?)",
+                damagedAsset.getId(), "Pantalla reemplazada", 40.0, today);
 
         var metrics = loanRepositoryPort.calculateDashboardMetrics();
 
         assertEquals(0, new BigDecimal("350.0").compareTo(metrics.estimatedLossValue()));
+        assertEquals(0, new BigDecimal("40.0").compareTo(metrics.maintenanceCostsValue()));
         assertEquals(50.0, metrics.onTimeReturnPercentage(), 0.001);
         assertEquals(1, metrics.assetsCurrentlyInField());
+        assertEquals(3, metrics.totalAssets());
+        assertEquals(0, metrics.availableAssets());
+        assertEquals(1, metrics.assetsUnderMaintenance());
+        assertEquals(1, metrics.lostAssets());
+        var modelMetrics = metrics.assetsByModel().stream()
+                .filter(model -> model.model().equals("Test model")).findFirst().orElseThrow();
+        assertEquals(3, modelMetrics.total());
+        assertEquals(0, modelMetrics.available());
+
+        var previousDayMetrics = loanRepositoryPort.calculateDashboardMetrics(
+                today.minusDays(1).atStartOfDay(),
+                today.atStartOfDay().minusNanos(1));
+        assertEquals(0, new BigDecimal("100.0")
+                .compareTo(previousDayMetrics.estimatedLossValue()));
+        assertEquals(0, BigDecimal.ZERO.compareTo(previousDayMetrics.maintenanceCostsValue()));
     }
 
     private UserEntity saveTechnician(String email) {

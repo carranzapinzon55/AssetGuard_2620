@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 import com.globalnet.assetguard.domain.model.Loan;
 import com.globalnet.assetguard.domain.model.LoanAuditPage;
 import com.globalnet.assetguard.domain.model.LoanDashboardMetrics;
+import com.globalnet.assetguard.domain.model.AssetModelMetrics;
 import com.globalnet.assetguard.domain.ports.output.AssetRepositoryPort;
 import com.globalnet.assetguard.domain.ports.output.LoanRepositoryPort;
 import com.globalnet.assetguard.domain.ports.output.UserRepositoryPort;
@@ -61,7 +62,9 @@ class LoanReportingUseCaseTest {
 
     @Test
     void dashboardMetricsDelegatesAggregateQuery() {
-        LoanDashboardMetrics expected = new LoanDashboardMetrics(new BigDecimal("125.00"), 75.0, 4);
+        LoanDashboardMetrics expected = new LoanDashboardMetrics(
+                new BigDecimal("125.00"), new BigDecimal("0.00"), 75.0, 4, 12, 5, 2, 1,
+                List.of(new AssetModelMetrics("Laptop", 4, 2)));
         when(loanRepositoryPort.calculateDashboardMetrics()).thenReturn(expected);
 
         assertEquals(expected, loanUseCase.dashboardMetrics());

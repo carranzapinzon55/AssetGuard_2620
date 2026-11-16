@@ -1,5 +1,7 @@
 export const USERS_QUERY = `
-  query Users { users { id fullName email role status } }
+  query Users($limit: Int = 50) {
+    users(limit: $limit) { id fullName email role status }
+  }
 `;
 
 export const CREATE_USER = `
@@ -15,14 +17,14 @@ export const UPDATE_USER = `
 `;
 
 export const ASSETS_QUERY = `
-  query Assets {
-    assets { id serialNumber model estimatedValue status purchaseDate }
+  query Assets($limit: Int = 50) {
+    assets(limit: $limit) { id serialNumber model estimatedValue status purchaseDate }
   }
 `;
 
 export const ASSETS_CATALOG_QUERY = `
-  query AssetCatalog {
-    assets { id serialNumber model status }
+  query AssetCatalog($limit: Int = 50) {
+    assets(limit: $limit) { id serialNumber model status }
   }
 `;
 
@@ -124,7 +126,7 @@ export const UPLOAD_ASSETS = `
 `;
 
 export const AUDIT_QUERY = `
-  query AuditLogs($serialNumber: String, $technicianId: ID, $startDate: String, $endDate: String, $status: LoanStatus, $page: Int, $limit: Int) {
+  query AuditLogs($serialNumber: String, $technicianId: ID, $startDate: String, $endDate: String, $status: LoanStatus, $page: Int, $limit: Int = 10) {
     auditLogs(serialNumber: $serialNumber, technicianId: $technicianId, startDate: $startDate, endDate: $endDate, status: $status, page: $page, limit: $limit) {
       loans {
         id requestDate dueLocalDate returnDateTime status returnCondition
@@ -140,7 +142,9 @@ export const AUDIT_QUERY = `
 export const DASHBOARD_QUERY = `
   query DashboardMetrics($startDate: String, $endDate: String) {
     dashboardMetrics(startDate: $startDate, endDate: $endDate) {
-      estimatedLossValue onTimeReturnPercentage assetsCurrentlyInField
+      estimatedLossValue maintenanceCostsValue onTimeReturnPercentage assetsCurrentlyInField
+      totalAssets availableAssets assetsUnderMaintenance lostAssets
+      assetsByModel { model total available }
     }
   }
 `;

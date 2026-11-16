@@ -1,6 +1,7 @@
 package com.globalnet.assetguard.infrastructure.outbound.persistence;
 
 import jakarta.persistence.*;
+import java.time.LocalDateTime;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.NoArgsConstructor;
@@ -34,4 +35,10 @@ public class UserEntity {
 
     @Column(name = "status", nullable = false)
     private Boolean status;
+
+    @Column(name = "password_reset_token")
+    private String passwordResetToken;
+
+    @Column(name = "password_reset_token_expires_at")
+    private LocalDateTime passwordResetTokenExpiresAt;
 }

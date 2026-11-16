@@ -1,16 +1,21 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
-import { ChevronLeft, ChevronRight, Download, Filter, RotateCcw, ShieldCheck } from "lucide-react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import { FileSpreadsheet, FileText, Filter, RotateCcw, ShieldCheck } from "lucide-react";
+import * as XLSX from "xlsx";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 import { useAuth } from "@/components/auth-provider";
 import { Combobox } from "@/components/workspace/combobox";
 import { AUDIT_QUERY, AUDIT_TECHNICIANS_QUERY, USERS_QUERY } from "@/lib/operations";
-import { Button, CopyButton, DataTable, EmptyState, Feedback, FormField, LoadingRows, PageTitle, SelectInput, StatusTag, TextInput } from "@/components/workspace/ui";
+import { Button, CopyButton, DataTable, EmptyState, Feedback, FormField, InsightCard, LoadingRows, PageTitle, PaginationControls, SelectInput, StatusTag, TextInput } from "@/components/workspace/ui";
+import { statusLabel } from "@/lib/localization";
 import { errorMessage, queryGraphQL, type LoanItem, type UserItem } from "@/lib/workspace";
 
 type AuditResult = { auditLogs: { loans: LoanItem[]; totalElements: number; page: number; limit: number; totalPages: number } };
 type AuditTechnicianLoans = { loans: Array<{ user: (UserItem & { role: string }) | null }> };
 type UsersResult = { users: UserItem[] };
+const allowedLimits = [10, 25, 50] as const;
 
 function getLocalTodayIso(): string {
   const now = new Date();
@@ -20,9 +25,17 @@ function getLocalTodayIso(): string {
   return `${year}-${month}-${day}`;
 }
 
-function csvField(value: string) {
-  const safeValue = /^[=+\-@]/.test(value) ? `'${value}` : value;
-  return `"${safeValue.replaceAll('"', '""')}"`;
+const auditExportHeaders = ["Fecha", "Activo", "Técnico", "Días de Mora", "Condición", "Estado"];
+
+function getAuditExportRows(loans: LoanItem[]) {
+  return loans.map((loan) => [
+    loan.requestDate?.replace("T", " ").slice(0, 16) ?? "",
+    loan.asset.serialNumber,
+    loan.user?.fullName || loan.user?.email || "",
+    loan.delayDays ?? "",
+    loan.returnCondition ? statusLabel(loan.returnCondition) : "",
+    statusLabel(loan.status),
+  ]);
 }
 
 export function AuditPage() {
@@ -31,17 +44,19 @@ export function AuditPage() {
   const [filters, setFilters] = useState({ serialNumber: "", technicianId: "", startDate: "", endDate: "", status: "" });
   const [applied, setApplied] = useState(filters);
   const [page, setPage] = useState(0);
+  const [limit, setLimit] = useState<(typeof allowedLimits)[number]>(10);
   const [data, setData] = useState<AuditResult["auditLogs"] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const limit = 20;
   const today = getLocalTodayIso();
+  const endDateRef = useRef<HTMLInputElement>(null);
+  const statusRef = useRef<HTMLSelectElement>(null);
 
   useEffect(() => {
     if (!session) return;
     let active = true;
     const request = session.user.role === "ADMIN"
-      ? queryGraphQL<UsersResult>(USERS_QUERY).then((result) => result.users)
+      ? queryGraphQL<UsersResult>(USERS_QUERY, { limit: 50 }).then((result) => result.users)
       : queryGraphQL<AuditTechnicianLoans>(AUDIT_TECHNICIANS_QUERY).then(({ loans }) => {
           const uniqueUsers = new Map<string, UserItem>();
           loans.forEach(({ user }) => {
@@ -71,7 +86,7 @@ export function AuditPage() {
       .catch((requestError: unknown) => { if (active) setError(errorMessage(requestError)); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [session?.token, applied, page]);
+  }, [session?.token, applied, page, limit]);
 
   function applyFilters(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -85,6 +100,7 @@ export function AuditPage() {
       return;
     }
     setError("");
+    setLoading(true);
     setPage(0);
     setApplied(filters);
   }
@@ -92,52 +108,64 @@ export function AuditPage() {
   function resetFilters() {
     const empty = { serialNumber: "", technicianId: "", startDate: "", endDate: "", status: "" };
     setError("");
+    setLoading(true);
     setFilters(empty);
     setApplied(empty);
     setPage(0);
   }
 
-  function exportReport() {
+  function handleExportExcel() {
     if (!data?.loans.length) return;
-    const rows = [
-      ["Fecha", "Activo", "Tecnico", "Estado", "Vencimiento", "Devolucion", "Condicion", "Inspector"],
-      ...data.loans.map((loan) => [
-        loan.requestDate?.replace("T", " ").slice(0, 16) ?? "",
-        loan.asset.serialNumber,
-        loan.user?.fullName || loan.user?.email || "",
-        loan.status,
-        loan.dueLocalDate || "",
-        loan.returnDateTime?.slice(0, 10) ?? "",
-        loan.returnCondition || "",
-        loan.inspector?.fullName || "",
-      ]),
-    ];
-    const csv = `\uFEFF${rows.map((row) => row.map(csvField).join(",")).join("\r\n")}`;
-    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `assetguard-auditoria-${getLocalTodayIso()}.csv`;
-    anchor.click();
-    URL.revokeObjectURL(url);
+    const worksheet = XLSX.utils.aoa_to_sheet([auditExportHeaders, ...getAuditExportRows(data.loans)]);
+    worksheet["!cols"] = [{ wch: 20 }, { wch: 18 }, { wch: 28 }, { wch: 16 }, { wch: 20 }, { wch: 16 }];
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Auditoría");
+    XLSX.writeFile(workbook, `assetguard-auditoria-${getLocalTodayIso()}.xlsx`);
+  }
+
+  function handleExportPDF() {
+    if (!data?.loans.length) return;
+    const document = new jsPDF({ orientation: "landscape" });
+    autoTable(document, {
+      head: [auditExportHeaders],
+      body: getAuditExportRows(data.loans).map((row) => row.map(String)),
+      styles: { fontSize: 8, cellPadding: 3 },
+      headStyles: { fillColor: [30, 75, 58] },
+      margin: { left: 12, right: 12 },
+    });
+    document.save(`assetguard-auditoria-${getLocalTodayIso()}.pdf`);
   }
 
   return (
     <div className="work-page">
       <PageTitle eyebrow="CONTROL · TRAZABILIDAD" title="Auditoría global" description="Filtra los movimientos de custodia por activo, técnico, estado y periodo." />
       <Feedback error={error} />
+      <section className="insight-grid" aria-label="Indicadores de auditoría">
+        <InsightCard label="MOVIMIENTOS ENCONTRADOS" value={data?.totalElements ?? 0} description="Resultados del periodo y filtros aplicados." progress={data?.totalElements ? Math.min((data.totalElements / 50) * 100, 100) : 0} detail={`La consulta actual contiene ${data?.totalElements ?? 0} movimientos.`} />
+        <InsightCard label="REGISTROS EN PÁGINA" value={data?.loans.length ?? 0} description="Movimientos mostrados en esta página." progress={((data?.loans.length ?? 0) / limit) * 100} detail={`${data?.loans.length ?? 0} de hasta ${limit} registros se muestran en la página actual.`} />
+        <InsightCard label="PRÉSTAMOS ACTIVOS" value={data?.loans.filter((loan) => loan.status === "APPROVED").length ?? 0} description="Préstamos aprobados en esta página." progress={((data?.loans.filter((loan) => loan.status === "APPROVED").length ?? 0) / limit) * 100} detail="Conteo de préstamos aprobados dentro de la página visible, sujeto a filtros." />
+      </section>
       <section className="work-section">
         <form className="audit-filter-grid" onSubmit={applyFilters}>
           <FormField label="Número de serie"><TextInput value={filters.serialNumber} onChange={(event) => setFilters({ ...filters, serialNumber: event.target.value })} placeholder="AG-0000" /></FormField>
           <FormField label="Técnico"><Combobox value={filters.technicianId} onValueChange={(technicianId) => setFilters({ ...filters, technicianId })} options={[{ value: "", label: "Todos los técnicos" }, ...technicians.map((technician) => ({ value: technician.id, label: technician.fullName || technician.email }))]} placeholder="Todos los técnicos" searchPlaceholder="Buscar técnico" emptyMessage="No se encontraron técnicos." /></FormField>
-          <FormField label="Desde"><TextInput type="date" max={filters.endDate && filters.endDate < today ? filters.endDate : today} value={filters.startDate} onChange={(event) => setFilters({ ...filters, startDate: event.target.value })} /></FormField>
-          <FormField label="Hasta"><TextInput type="date" min={filters.startDate || undefined} max={today} value={filters.endDate} onChange={(event) => setFilters({ ...filters, endDate: event.target.value })} /></FormField>
-          <FormField label="Estado"><SelectInput value={filters.status} onChange={(event) => setFilters({ ...filters, status: event.target.value })}><option value="">Todos</option><option value="PENDING">Pendiente</option><option value="APPROVED">Aprobado</option><option value="REJECTED">Rechazado</option><option value="RETURNED">Devuelto</option></SelectInput></FormField>
+          <FormField label="Desde"><TextInput type="date" max={filters.endDate && filters.endDate < today ? filters.endDate : today} value={filters.startDate} onChange={(event) => { setFilters({ ...filters, startDate: event.target.value }); if (event.target.value) endDateRef.current?.focus(); }} /></FormField>
+          <FormField label="Hasta"><TextInput inputRef={endDateRef} type="date" min={filters.startDate || undefined} max={today} value={filters.endDate} onChange={(event) => { setFilters({ ...filters, endDate: event.target.value }); if (event.target.value) statusRef.current?.focus(); }} /></FormField>
+          <FormField label="Estado"><SelectInput selectRef={statusRef} value={filters.status} onChange={(event) => setFilters({ ...filters, status: event.target.value })}><option value="">Todos</option><option value="PENDING">Pendiente</option><option value="APPROVED">Aprobado</option><option value="REJECTED">Rechazado</option><option value="RETURNED">Devuelto</option></SelectInput></FormField>
           <div className="filter-actions"><Button type="submit"><Filter size={15} /> Aplicar</Button><Button type="button" variant="quiet" onClick={resetFilters}><RotateCcw size={15} /> Limpiar</Button></div>
         </form>
       </section>
-      <section className="work-section"><div className="section-toolbar"><div className="toolbar-title"><ShieldCheck size={17} /><strong>Movimientos registrados</strong><span>{data?.totalElements ?? 0}</span></div><div className="audit-export-actions"><span className="toolbar-note">PÁGINA {page + 1} DE {Math.max(data?.totalPages ?? 1, 1)}</span><Button variant="secondary" onClick={exportReport} disabled={loading || !data?.loans.length}><Download size={14} /> Exportar CSV</Button></div></div>
-        {loading ? <LoadingRows label="Consultando auditoría" /> : !data?.loans.length ? <EmptyState title="No hay movimientos" detail="Cambia los filtros para consultar otros registros." /> : <DataTable headings={["Fecha", "Activo", "Técnico", "Estado", "Vencimiento", "Devolución", "Inspector"]}>{data.loans.map((loan) => <tr key={loan.id}><td className="telemetry-value">{loan.requestDate?.replace("T", " ").slice(0, 16) ?? "—"}</td><td><span className="copy-value"><span className="table-primary mono-cell telemetry-value">{loan.asset.serialNumber}</span><CopyButton text={loan.asset.serialNumber} label={`Copiar serie ${loan.asset.serialNumber}`} /></span><small className="table-secondary">{loan.asset.model}</small></td><td>{loan.user?.fullName || loan.user?.email || "—"}</td><td><StatusTag value={loan.status} /></td><td className="telemetry-value">{loan.dueLocalDate || "—"}</td><td className="telemetry-value">{loan.returnDateTime?.slice(0, 10) ?? "—"}{loan.returnCondition && <small className="table-secondary"><StatusTag value={loan.returnCondition} /></small>}</td><td>{loan.inspector?.fullName || "—"}</td></tr>)}</DataTable>}
-        <div className="table-footer"><span>{data?.totalElements ?? 0} resultados</span><div className="pagination"><button type="button" className="table-action" disabled={page === 0 || loading} onClick={() => setPage((value) => Math.max(0, value - 1))} aria-label="Página anterior"><ChevronLeft size={16} /></button><span>{page + 1} / {Math.max(data?.totalPages ?? 1, 1)}</span><button type="button" className="table-action" disabled={loading || page + 1 >= (data?.totalPages ?? 1)} onClick={() => setPage((value) => value + 1)} aria-label="Página siguiente"><ChevronRight size={16} /></button></div></div>
+      <section className="work-section"><div className="section-toolbar"><div className="toolbar-title"><ShieldCheck size={17} /><strong>Movimientos registrados</strong><span>{data?.totalElements ?? 0}</span></div><div className="audit-export-actions"><span className="toolbar-note">PÁGINA {page + 1} DE {Math.max(data?.totalPages ?? 1, 1)}</span><Button variant="secondary" onClick={handleExportExcel} disabled={loading || !data?.loans.length}><FileSpreadsheet size={14} /> Excel</Button><Button variant="secondary" onClick={handleExportPDF} disabled={loading || !data?.loans.length}><FileText size={14} /> PDF</Button></div></div>
+        {loading ? <LoadingRows label="Consultando auditoría" /> : !data?.loans.length ? <EmptyState title="No hay movimientos" detail="Cambia los filtros para consultar otros registros." /> : <DataTable headings={["Fecha", "Activo", "Técnico", "Estado", "Vencimiento", "Devolución", "Inspector"]}>{data.loans.map((loan) => <tr key={loan.id}><td className="telemetry-value font-mono">{loan.requestDate?.replace("T", " ").slice(0, 16) ?? "—"}</td><td><span className="copy-value"><span className="table-primary mono-cell telemetry-value font-mono">{loan.asset.serialNumber}</span><CopyButton text={loan.asset.serialNumber} label={`Copiar serie ${loan.asset.serialNumber}`} /></span><small className="table-secondary">{loan.asset.model}</small><small className="table-secondary id-copy-line font-mono">ID <span>{loan.id}</span><CopyButton className="inline-copy" text={loan.id} label={`Copiar ID del préstamo de ${loan.asset.serialNumber}`} /></small></td><td>{loan.user?.fullName || loan.user?.email || "—"}</td><td><StatusTag value={loan.status} /></td><td className="telemetry-value font-mono">{loan.dueLocalDate || "—"}</td><td className="telemetry-value font-mono">{loan.returnDateTime?.slice(0, 10) ?? "—"}{loan.returnCondition && <small className="table-secondary"><StatusTag value={loan.returnCondition} /></small>}</td><td>{loan.inspector?.fullName || "—"}</td></tr>)}</DataTable>}
+        <PaginationControls
+          currentPage={page}
+          totalItems={data?.totalElements ?? 0}
+          pageSize={limit}
+          loading={loading}
+          onPageChange={(nextPage) => { setLoading(true); setPage(nextPage); }}
+          onPageSizeChange={(nextLimit) => { setLoading(true); setLimit(nextLimit as (typeof allowedLimits)[number]); setPage(0); }}
+          itemLabel="movimientos"
+        />
       </section>
     </div>
   );

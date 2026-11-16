@@ -17,4 +17,5 @@ public class AssetRequestDto {
     private Double estimatedValue;
     private String status;
     private LocalDate purchaseDate;
+    private Integer stockQuantity;
 }

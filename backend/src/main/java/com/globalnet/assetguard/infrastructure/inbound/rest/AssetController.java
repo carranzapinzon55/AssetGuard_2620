@@ -42,6 +42,7 @@ public class AssetController {
                 .estimatedValue(request.getEstimatedValue())
                 .status(request.getStatus())
                 .purchaseDate(request.getPurchaseDate())
+                .stockQuantity(request.getStockQuantity())
                 .build();
 
         Asset savedAsset = assetUseCase.register(asset);

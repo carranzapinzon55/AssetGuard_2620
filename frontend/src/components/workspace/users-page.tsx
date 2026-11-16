@@ -4,15 +4,17 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useSearchParams } from "next/navigation";
 import { Edit3, Plus, Search, UserRound, X } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
-import { Button, CopyButton, DataTable, EmptyState, Feedback, FormField, LoadingRows, PageTitle, SelectInput, StatusTag, TextInput, useEscapeKey, useModalFocus } from "@/components/workspace/ui";
+import { Button, CopyButton, DataTable, EmptyState, Feedback, FormField, InsightCard, LoadingRows, PageTitle, PaginationControls, SelectInput, StatusTag, TextInput, useEscapeKey, useModalFocus } from "@/components/workspace/ui";
 import { CREATE_USER, UPDATE_USER, USERS_QUERY } from "@/lib/operations";
 import { roleLabel } from "@/lib/localization";
 import { errorMessage, queryGraphQL, type UserItem } from "@/lib/workspace";
+import { matchesSearch } from "@/lib/utils";
 
 type UsersResult = { users: UserItem[] };
 type UserResult = { createUser: UserItem; updateUser: UserItem };
 
-const emptyForm = { fullName: "", email: "", password: "", role: "TECHNICIAN" as UserItem["role"], status: true };
+const emptyForm = { fullName: "", email: "", password: "", confirmPassword: "", role: "TECHNICIAN" as UserItem["role"], status: true };
+const MAX_USERS = 50;
 
 export function UsersPage() {
   const { session } = useAuth();
@@ -21,6 +23,8 @@ export function UsersPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState(() => searchParams.get("search") ?? "");
   const [roleFilter, setRoleFilter] = useState<UserItem["role"] | "ALL">("ALL");
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(10);
   const [editing, setEditing] = useState<UserItem | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [formOpen, setFormOpen] = useState(false);
@@ -41,7 +45,7 @@ export function UsersPage() {
 
   useEffect(() => {
     let active = true;
-    queryGraphQL<UsersResult>(USERS_QUERY)
+    queryGraphQL<UsersResult>(USERS_QUERY, { limit: MAX_USERS })
       .then((result) => { if (active) setUsers(result.users); })
       .catch((error: unknown) => { if (active) setFeedback({ error: errorMessage(error) }); })
       .finally(() => { if (active) setLoading(false); });
@@ -49,13 +53,15 @@ export function UsersPage() {
   }, [session?.token, refresh]);
 
   const filtered = useMemo(() => {
-    const query = search.trim().toLowerCase();
     return users.filter((user) => {
-      const matchesSearch = `${user.fullName ?? ""} ${user.email} ${user.role}`.toLowerCase().includes(query);
+      const matchesText = matchesSearch(`${user.fullName ?? ""} ${user.email} ${user.role}`, search);
       const matchesRole = roleFilter === "ALL" || user.role === roleFilter;
-      return matchesSearch && matchesRole;
+      return matchesText && matchesRole;
     });
   }, [users, search, roleFilter]);
+  const visibleUsers = filtered.slice(page * pageSize, (page + 1) * pageSize);
+  const activeUsers = users.filter((user) => user.status).length;
+  const technicians = users.filter((user) => user.role === "TECHNICIAN").length;
 
   function startCreate() {
     setEditing(null);
@@ -66,7 +72,7 @@ export function UsersPage() {
 
   function startEdit(user: UserItem) {
     setEditing(user);
-    setForm({ fullName: user.fullName ?? "", email: user.email, password: "", role: user.role, status: user.status });
+    setForm({ fullName: user.fullName ?? "", email: user.email, password: "", confirmPassword: "", role: user.role, status: user.status });
     setFormOpen(true);
     setFeedback({});
   }
@@ -76,12 +82,25 @@ export function UsersPage() {
     setFeedback({});
     try {
       if (editing) {
-        const input = { id: editing.id, ...form, password: form.password || null };
+        const input = {
+          id: editing.id,
+          fullName: form.fullName,
+          email: form.email,
+          password: form.password || null,
+          role: form.role,
+          status: form.status,
+        };
         await queryGraphQL<UserResult>(UPDATE_USER, { input });
         setFeedback({ success: "La cuenta se actualizó." });
       } else {
-        if (!form.password) throw new Error("La contraseña es obligatoria para una cuenta nueva.");
-        await queryGraphQL<UserResult>(CREATE_USER, { input: form });
+        const input = {
+          fullName: form.fullName,
+          email: form.email,
+          password: form.password,
+          role: form.role,
+          status: form.status,
+        };
+        await queryGraphQL<UserResult>(CREATE_USER, { input });
         setFeedback({ success: "La cuenta se creó." });
       }
       setFormOpen(false);
@@ -95,6 +114,10 @@ export function UsersPage() {
 
   function saveUser(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if ((!editing || form.password) && form.password !== form.confirmPassword) {
+      setFeedback({ error: "La contraseña y su confirmación deben coincidir." });
+      return;
+    }
     if (!editing) {
       void persistUser();
       return;
@@ -110,20 +133,26 @@ export function UsersPage() {
     <div className="work-page">
       <PageTitle eyebrow="ADMINISTRACIÓN · CUENTAS" title="Usuarios" description="Administra identidades, permisos y estado de acceso." action={<Button onClick={startCreate}><Plus size={16} /> Crear usuario</Button>} />
       <Feedback {...feedback} />
+      <section className="insight-grid" aria-label="Indicadores de usuarios">
+        <InsightCard label="USUARIOS CARGADOS" value={users.length} description="Cuentas incluidas en la consulta actual." progress={Math.min(users.length * 2, 100)} detail={`${users.length} cuentas están incluidas en la consulta actual; ajusta el selector de ítems para ampliar la muestra.`} />
+        <InsightCard label="CUENTAS ACTIVAS" value={activeUsers} description="Usuarios con acceso habilitado." progress={users.length ? (activeUsers / users.length) * 100 : 0} detail={`${activeUsers} de ${users.length} cuentas tienen acceso habilitado.`} />
+        <InsightCard label="TÉCNICOS" value={technicians} description="Cuentas asignadas a operación técnica." progress={users.length ? (technicians / users.length) * 100 : 0} detail={`${technicians} cuentas tienen el rol de técnico.`} />
+      </section>
       <section className="work-section">
         <div className="section-toolbar">
           <div className="toolbar-title"><UserRound size={17} /><strong>Directorio de usuarios</strong><span>{users.length}</span></div>
-          <div className="toolbar-controls"><label className="search-control"><Search size={16} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar por nombre, correo o rol" aria-label="Buscar usuarios" /></label><SelectInput className="filter-select" value={roleFilter} onChange={(event) => setRoleFilter(event.target.value as typeof roleFilter)} aria-label="Filtrar usuarios por rol"><option value="ALL">Todos los roles</option><option value="ADMIN">ADMIN</option><option value="INSPECTOR">INSPECTOR</option><option value="TECHNICIAN">TECHNICIAN</option></SelectInput></div>
+          <div className="toolbar-controls"><label className="search-control"><Search size={16} /><input value={search} onChange={(event) => { setSearch(event.target.value); setPage(0); }} placeholder="Buscar por nombre, correo o rol" aria-label="Buscar usuarios" /></label><SelectInput className="filter-select" value={roleFilter} onChange={(event) => { setRoleFilter(event.target.value as typeof roleFilter); setPage(0); }} aria-label="Filtrar usuarios por rol"><option value="ALL">Todos los roles</option><option value="ADMIN">ADMIN</option><option value="INSPECTOR">INSPECTOR</option><option value="TECHNICIAN">TECHNICIAN</option></SelectInput></div>
         </div>
         {loading ? <LoadingRows label="Cargando usuarios" /> : filtered.length === 0 ? <EmptyState title={users.length === 0 ? "No hay usuarios registrados" : "Sin coincidencias"} detail={users.length === 0 ? "No hay usuarios registrados en el sistema en este momento." : "No encontramos usuarios que coincidan con la búsqueda."} /> : (
           <DataTable headings={["Usuario", "Correo", "Rol", "Estado", "Acciones"]}>
-            {filtered.map((user) => <tr key={user.id}>
-              <td><span className="table-primary">{user.fullName || "Sin nombre"}</span><small className="table-secondary copy-value">ID <span className="telemetry-value">{user.id}</span><CopyButton className="inline-copy" text={user.id} label={`Copiar ID de ${user.fullName || user.email}`} /></small></td>
+            {visibleUsers.map((user) => <tr key={user.id}>
+              <td><span className="table-primary">{user.fullName || "Sin nombre"}</span><small className="table-secondary copy-value font-mono">ID <span className="telemetry-value">{user.id}</span><CopyButton className="inline-copy" text={user.id} label={`Copiar ID de ${user.fullName || user.email}`} /></small></td>
               <td>{user.email}</td><td><span className="role-label">{roleLabel(user.role)}</span></td><td><StatusTag value={user.status ? "ACTIVE" : "INACTIVE"} /></td>
               <td><button className="table-action" type="button" onClick={() => startEdit(user)} aria-label={`Editar usuario ${user.email}`} title={`Editar usuario ${user.email}`}><Edit3 size={15} /></button></td>
             </tr>)}
           </DataTable>
         )}
+        <PaginationControls currentPage={page} totalItems={filtered.length} pageSize={pageSize} onPageChange={setPage} onPageSizeChange={(nextPageSize) => { setPageSize(nextPageSize); setPage(0); }} itemLabel="usuarios" />
       </section>
 
       {formOpen && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setFormOpen(false); }}>
@@ -142,6 +171,15 @@ export function UsersPage() {
             </FormField>
             <FormField label={editing ? "Nueva contraseña (opcional)" : "Contraseña inicial"}>
               <TextInput type="password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} required={!editing} autoComplete="new-password" />
+            </FormField>
+            <FormField label="Confirmar contraseña">
+              <TextInput
+                type="password"
+                value={form.confirmPassword}
+                onChange={(event) => setForm({ ...form, confirmPassword: event.target.value })}
+                required={!editing || Boolean(form.password)}
+                autoComplete="new-password"
+              />
             </FormField>
             <div className="form-grid two-col">
               <FormField label="Rol">

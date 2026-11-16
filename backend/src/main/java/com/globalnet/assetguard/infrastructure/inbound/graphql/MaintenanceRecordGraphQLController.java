@@ -50,7 +50,24 @@ public class MaintenanceRecordGraphQLController {
         return GraphQLViews.MaintenanceRecordView.from(maintenanceRecordUseCase.complete(input.recordId()));
     }
 
+    @MutationMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'INSPECTOR')")
+    public GraphQLViews.MaintenanceRecordView updateMaintenanceRecord(
+            @Argument("input") UpdateMaintenanceRecordInput input) {
+        MaintenanceRecord changes = MaintenanceRecord.builder()
+                .providerName(input.providerName())
+                .reason(input.reason())
+                .cost(input.cost())
+                .build();
+        return GraphQLViews.MaintenanceRecordView.from(
+                maintenanceRecordUseCase.update(input.recordId(), changes));
+    }
+
     public record CompleteMaintenanceInput(Long recordId) {
+    }
+
+    public record UpdateMaintenanceRecordInput(
+            Long recordId, String providerName, String reason, Double cost) {
     }
 
     public record MaintenanceRecordInput(

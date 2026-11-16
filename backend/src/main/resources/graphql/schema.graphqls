@@ -1,7 +1,7 @@
 type Query {
-    assets: [Asset!]!
+    assets(limit: Int = 10): [Asset!]!
     loans: [Loan!]!
-    users: [User!]!
+    users(limit: Int = 10): [User!]!
     maintenanceRecords: [MaintenanceRecord!]!
     myLoanHistory: [Loan!]!
     auditLogs(
@@ -18,6 +18,7 @@ type Query {
 
 type Mutation {
     login(input: LoginInput!): LoginPayload!
+    requestPasswordReset(email: String!): PasswordResetPayload!
     createAsset(input: AssetInput!): Asset!
     updateAsset(input: UpdateAssetInput!): Asset!
     createUser(input: UserInput!): User!
@@ -29,11 +30,16 @@ type Mutation {
     returnLoan(input: ReturnLoanInput!): Loan!
     createMaintenanceRecord(input: MaintenanceRecordInput!): MaintenanceRecord!
     completeMaintenance(input: CompleteMaintenanceInput!): MaintenanceRecord!
+    updateMaintenanceRecord(input: UpdateMaintenanceRecordInput!): MaintenanceRecord!
 }
 
 type LoginPayload {
     token: String!
     user: User!
+}
+
+type PasswordResetPayload {
+    message: String!
 }
 
 type BulkUploadPayload {
@@ -69,6 +75,7 @@ type Asset {
     estimatedValue: Float
     status: String!
     purchaseDate: String
+    stockQuantity: Int
 }
 
 type Loan {
@@ -95,8 +102,20 @@ type LoanAuditPage {
 
 type LoanDashboardMetrics {
     estimatedLossValue: Float!
+    maintenanceCostsValue: Float!
     onTimeReturnPercentage: Float!
     assetsCurrentlyInField: Int!
+    totalAssets: Int!
+    availableAssets: Int!
+    assetsUnderMaintenance: Int!
+    lostAssets: Int!
+    assetsByModel: [AssetModelMetrics!]!
+}
+
+type AssetModelMetrics {
+    model: String!
+    total: Int!
+    available: Int!
 }
 
 type MaintenanceRecord {
@@ -115,6 +134,7 @@ input AssetInput {
     estimatedValue: Float
     status: String!
     purchaseDate: String
+    stockQuantity: Int
 }
 
 input UpdateAssetInput {
@@ -124,6 +144,7 @@ input UpdateAssetInput {
     estimatedValue: Float
     status: String!
     purchaseDate: String
+    stockQuantity: Int
 }
 
 input UserInput {
@@ -145,6 +166,13 @@ input UpdateUserInput {
 
 input CompleteMaintenanceInput {
     recordId: ID!
+}
+
+input UpdateMaintenanceRecordInput {
+    recordId: ID!
+    providerName: String
+    reason: String
+    cost: Float
 }
 
 input LoginInput {
