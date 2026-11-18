@@ -18,12 +18,12 @@ public interface MaintenanceRecordJpaRepository extends JpaRepository<Maintenanc
 
     List<MaintenanceRecordEntity> findByAssetId(Long assetId);
 
-    @Query("""
-        select coalesce(sum(record.cost), 0)
-        from MaintenanceRecordEntity record
-        where (:startDate is null or record.startDate >= :startDate)
-          and (:endDate is null or record.startDate <= :endDate)
-        """)
+    @Query(value = """
+        select coalesce(sum(record.cost), 0.0)
+        from maintenance_records record
+        where (cast(:startDate as date) is null or record.start_date >= cast(:startDate as date))
+          and (cast(:endDate as date) is null or record.start_date <= cast(:endDate as date))
+        """, nativeQuery = true)
     Double sumCostsForStartDateRange(
             @Param("startDate") LocalDate startDate,
             @Param("endDate") LocalDate endDate);

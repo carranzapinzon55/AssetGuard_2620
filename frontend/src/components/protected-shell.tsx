@@ -20,8 +20,9 @@ import { useEffect, useState, type ReactNode } from "react";
 import { motion } from "framer-motion";
 import { useAuth } from "@/components/auth-provider";
 import { WorkspaceTools } from "@/components/workspace/workspace-tools";
+import { LostReportsBell } from "@/components/workspace/lost-reports-dialog";
 import { CorporateFooter } from "@/components/corporate-footer";
-import { ConfirmDialog, useEscapeKey, useModalFocus } from "@/components/workspace/ui";
+import { ConfirmDialog, ModalPortal, useEscapeKey, useModalFocus } from "@/components/workspace/ui";
 import { landingPath } from "@/lib/auth";
 import { roleLabel } from "@/lib/localization";
 
@@ -191,6 +192,7 @@ export function ProtectedShell({ children }: { children: ReactNode }) {
             <strong>{title}</strong>
           </div>
           <div className="topbar-right">
+            <LostReportsBell />
             <WorkspaceTools />
             <span className="environment-pill"><span /> SISTEMA ACTIVO</span>
             <span className="topbar-date">AssetGuard 2620</span>
@@ -210,67 +212,69 @@ export function ProtectedShell({ children }: { children: ReactNode }) {
       </div>
 
       {profileOpen && (
-        <div
-          className="modal-backdrop"
-          role="presentation"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) setProfileOpen(false);
-          }}
-        >
-          <section
-            ref={profileDialogRef}
-            className="work-modal profile-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="profile-title"
-            tabIndex={-1}
+        <ModalPortal>
+          <div
+            className="modal-backdrop"
+            role="presentation"
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget) setProfileOpen(false);
+            }}
           >
-            <div className="modal-heading">
-              <div>
-                <p className="work-eyebrow">CUENTA · GLOBALNET</p>
-                <h2 id="profile-title">Mi Perfil</h2>
+            <section
+              ref={profileDialogRef}
+              className="work-modal profile-modal"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="profile-title"
+              tabIndex={-1}
+            >
+              <div className="modal-heading">
+                <div>
+                  <p className="work-eyebrow">CUENTA · GLOBALNET</p>
+                  <h2 id="profile-title">Mi Perfil</h2>
+                </div>
+                <button type="button" className="table-action" aria-label="Cerrar perfil" onClick={() => setProfileOpen(false)}>
+                  <X size={17} />
+                </button>
               </div>
-              <button type="button" className="table-action" aria-label="Cerrar perfil" onClick={() => setProfileOpen(false)}>
-                <X size={17} />
-              </button>
-            </div>
 
-            <div className="profile-summary">
-              <span className="avatar">
-                <Image src="/AssetGuard_2620_isotipo_app.png" alt="" width={34} height={34} className="object-contain" />
-              </span>
-              <div>
-                <strong>{session.user.fullName?.trim() || roleLabel(session.user.role) || "Usuario"}</strong>
-                <span>{session.user.email}</span>
+              <div className="profile-summary">
+                <span className="avatar">
+                  <Image src="/AssetGuard_2620_isotipo_app.png" alt="" width={34} height={34} className="object-contain" />
+                </span>
+                <div>
+                  <strong>{session.user.fullName?.trim() || roleLabel(session.user.role) || "Usuario"}</strong>
+                  <span>{session.user.email}</span>
+                </div>
               </div>
-            </div>
 
-            <dl className="profile-details">
-              <div>
-                <dt>Rol en el sistema</dt>
-                <dd>{roleLabel(session.user.role)}</dd>
-              </div>
-              <div>
-                <dt>Inicio de sesión</dt>
-                <dd>{sessionStartedAt}</dd>
-              </div>
-              <div>
-                <dt>Estado de sesión</dt>
-                <dd>
-                  <span className="profile-session-status"><span /> Activa</span>
-                </dd>
-              </div>
-            </dl>
+              <dl className="profile-details">
+                <div>
+                  <dt>Rol en el sistema</dt>
+                  <dd>{roleLabel(session.user.role)}</dd>
+                </div>
+                <div>
+                  <dt>Inicio de sesión</dt>
+                  <dd>{sessionStartedAt}</dd>
+                </div>
+                <div>
+                  <dt>Estado de sesión</dt>
+                  <dd>
+                    <span className="profile-session-status"><span /> Activa</span>
+                  </dd>
+                </div>
+              </dl>
 
-            <section className="institution-card" aria-labelledby="institution-title">
-              <p className="work-eyebrow">GLOBALNET TELECOM</p>
-              <h3 id="institution-title">Sobre GlobalNet Telecom &amp; AssetGuard 2620</h3>
-              <p>
-                AssetGuard 2620 centraliza el inventario tecnológico y la custodia de equipos para mantener trazabilidad desde la asignación hasta su devolución o mantenimiento.
-              </p>
+              <section className="institution-card" aria-labelledby="institution-title">
+                <p className="work-eyebrow">GLOBALNET TELECOM</p>
+                <h3 id="institution-title">Sobre GlobalNet Telecom &amp; AssetGuard 2620</h3>
+                <p>
+                  AssetGuard 2620 centraliza el inventario tecnológico y la custodia de equipos para mantener trazabilidad desde la asignación hasta su devolución o mantenimiento.
+                </p>
+              </section>
             </section>
-          </section>
-        </div>
+          </div>
+        </ModalPortal>
       )}
 
       <ConfirmDialog

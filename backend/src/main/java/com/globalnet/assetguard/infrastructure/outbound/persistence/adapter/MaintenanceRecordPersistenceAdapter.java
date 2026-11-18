@@ -2,10 +2,13 @@ package com.globalnet.assetguard.infrastructure.outbound.persistence.adapter;
 
 import com.globalnet.assetguard.domain.model.Asset;
 import com.globalnet.assetguard.domain.model.MaintenanceRecord;
+import com.globalnet.assetguard.domain.model.Provider;
 import com.globalnet.assetguard.domain.ports.output.MaintenanceRecordRepositoryPort;
 import com.globalnet.assetguard.infrastructure.outbound.persistence.MaintenanceRecordJpaRepository;
+import com.globalnet.assetguard.infrastructure.outbound.persistence.ProviderJpaRepository;
 import com.globalnet.assetguard.infrastructure.outbound.persistence.entity.AssetEntity;
 import com.globalnet.assetguard.infrastructure.outbound.persistence.entity.MaintenanceRecordEntity;
+import com.globalnet.assetguard.infrastructure.outbound.persistence.entity.ProviderEntity;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.stereotype.Repository;
@@ -14,10 +17,13 @@ import org.springframework.stereotype.Repository;
 public class MaintenanceRecordPersistenceAdapter implements MaintenanceRecordRepositoryPort {
 
     private final MaintenanceRecordJpaRepository maintenanceRecordJpaRepository;
+    private final ProviderJpaRepository providerJpaRepository;
 
     public MaintenanceRecordPersistenceAdapter(
-            MaintenanceRecordJpaRepository maintenanceRecordJpaRepository) {
+            MaintenanceRecordJpaRepository maintenanceRecordJpaRepository,
+            ProviderJpaRepository providerJpaRepository) {
         this.maintenanceRecordJpaRepository = maintenanceRecordJpaRepository;
+        this.providerJpaRepository = providerJpaRepository;
     }
 
     @Override
@@ -66,10 +72,18 @@ public class MaintenanceRecordPersistenceAdapter implements MaintenanceRecordRep
                 .stockQuantity(entity.getAsset().getStockQuantity())
                 .build();
 
+        Provider provider = entity.getProvider() == null
+                ? null
+                : Provider.builder()
+                        .id(entity.getProvider().getId())
+                        .name(entity.getProvider().getName())
+                        .active(entity.getProvider().getActive())
+                        .build();
+
         return MaintenanceRecord.builder()
                 .id(entity.getId())
                 .asset(asset)
-                .providerName(entity.getProviderName())
+                .provider(provider)
                 .reason(entity.getReason())
                 .cost(entity.getCost())
                 .startDate(entity.getStartDate())
@@ -86,10 +100,23 @@ public class MaintenanceRecordPersistenceAdapter implements MaintenanceRecordRep
                 ? null
                 : AssetEntity.builder().id(domain.getAsset().getId()).build();
 
+        ProviderEntity providerEntity = null;
+        if (domain.getProvider() != null) {
+            if (domain.getProvider().getId() != null) {
+                providerEntity = providerJpaRepository.findById(domain.getProvider().getId())
+                        .orElse(null);
+            } else if (domain.getProvider().getName() != null && !domain.getProvider().getName().isBlank()) {
+                String cleanName = domain.getProvider().getName().trim();
+                providerEntity = providerJpaRepository.findByName(cleanName)
+                        .orElseGet(() -> providerJpaRepository.save(
+                                ProviderEntity.builder().name(cleanName).active(true).build()));
+            }
+        }
+
         return MaintenanceRecordEntity.builder()
                 .id(domain.getId())
                 .asset(asset)
-                .providerName(domain.getProviderName())
+                .provider(providerEntity)
                 .reason(domain.getReason())
                 .cost(domain.getCost())
                 .startDate(domain.getStartDate())

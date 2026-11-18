@@ -43,8 +43,8 @@ public class BulkUploadAssetsUseCase {
             throw rowError(rowNumber, "model es obligatorio");
         }
         if (asset.getEstimatedValue() == null || !Double.isFinite(asset.getEstimatedValue())
-                || asset.getEstimatedValue() < 10) {
-            throw rowError(rowNumber, "estimatedValue debe ser un valor numérico de al menos 10 USD");
+                || asset.getEstimatedValue() < 0.25) {
+            throw rowError(rowNumber, "estimatedValue debe ser un valor numérico de al menos 0.25 USD (equivalente a $1.000 COP)");
         }
         if (asset.getStockQuantity() != null && asset.getStockQuantity() < 0) {
             throw rowError(rowNumber, "stockQuantity no puede ser negativo");

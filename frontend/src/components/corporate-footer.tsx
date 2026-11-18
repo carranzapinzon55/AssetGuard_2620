@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { X } from "lucide-react";
-import { useEscapeKey, useModalFocus } from "@/components/workspace/ui";
+import { ModalPortal, useEscapeKey, useModalFocus } from "@/components/workspace/ui";
 
 type Notice = "privacy" | "custody";
 
@@ -39,17 +39,21 @@ export function CorporateFooter({ className = "" }: { className?: string }) {
           <button type="button" onClick={(event) => openNotice("custody", event.currentTarget)}>Términos de Custodia de Activos</button>
         </nav>
       </footer>
-      {notice && <div className="modal-backdrop legal-backdrop" role="presentation" onMouseDown={(event) => {
-        if (event.target === event.currentTarget) setActiveNotice(null);
-      }}>
-        <section ref={dialogRef} className="work-modal legal-modal" role="dialog" aria-modal="true" aria-labelledby="legal-notice-title" tabIndex={-1}>
-          <div className="modal-heading">
-            <div><p className="work-eyebrow">GLOBALNET TELECOM · ASSETGUARD 2620</p><h2 id="legal-notice-title">{notice.title}</h2></div>
-            <button type="button" className="table-action" title="Cerrar aviso" aria-label="Cerrar aviso" onClick={() => setActiveNotice(null)}><X size={17} /></button>
+      {notice && (
+        <ModalPortal>
+          <div className="modal-backdrop legal-backdrop" role="presentation" onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setActiveNotice(null);
+          }}>
+            <section ref={dialogRef} className="work-modal legal-modal" role="dialog" aria-modal="true" aria-labelledby="legal-notice-title" tabIndex={-1}>
+              <div className="modal-heading">
+                <div><p className="work-eyebrow">GLOBALNET TELECOM · ASSETGUARD 2620</p><h2 id="legal-notice-title">{notice.title}</h2></div>
+                <button type="button" className="table-action" title="Cerrar aviso" aria-label="Cerrar aviso" onClick={() => setActiveNotice(null)}><X size={17} /></button>
+              </div>
+              <p className="legal-notice-copy">{notice.description}</p>
+            </section>
           </div>
-          <p className="legal-notice-copy">{notice.description}</p>
-        </section>
-      </div>}
+        </ModalPortal>
+      )}
     </>
   );
 }

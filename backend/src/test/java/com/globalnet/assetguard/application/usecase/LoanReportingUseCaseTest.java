@@ -70,4 +70,30 @@ class LoanReportingUseCaseTest {
         assertEquals(expected, loanUseCase.dashboardMetrics());
         verify(loanRepositoryPort).calculateDashboardMetrics();
     }
+
+    @Test
+    void dashboardMetricsWithDateRangeDelegatesAggregateQuery() {
+        LocalDateTime start = LocalDateTime.of(2026, 11, 4, 0, 0, 0);
+        LocalDateTime end = LocalDateTime.of(2026, 11, 30, 23, 59, 59, 999_000_000);
+        LoanDashboardMetrics expected = new LoanDashboardMetrics(
+                new BigDecimal("250.00"), new BigDecimal("50.00"), 85.0, 3, 10, 6, 1, 0,
+                List.of(new AssetModelMetrics("Monitor", 3, 2)));
+        when(loanRepositoryPort.calculateDashboardMetrics(start, end)).thenReturn(expected);
+
+        LoanDashboardMetrics result = loanUseCase.dashboardMetrics(start, end);
+
+        assertEquals(expected, result);
+        verify(loanRepositoryPort).calculateDashboardMetrics(start, end);
+    }
+
+    @Test
+    void dashboardMetricsRejectsStartDateAfterEndDate() {
+        LocalDateTime start = LocalDateTime.of(2026, 11, 30, 0, 0, 0);
+        LocalDateTime end = LocalDateTime.of(2026, 11, 4, 0, 0, 0);
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                () -> loanUseCase.dashboardMetrics(start, end));
+
+        assertEquals("startDate must be before or equal to endDate", exception.getMessage());
+    }
 }

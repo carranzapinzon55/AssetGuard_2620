@@ -14,6 +14,8 @@ type Query {
         limit: Int = 20
     ): LoanAuditPage!
     dashboardMetrics(startDate: String, endDate: String): LoanDashboardMetrics!
+    lostAssetReports: [LostAssetReport!]!
+    providers: [Provider!]!
 }
 
 type Mutation {
@@ -31,6 +33,8 @@ type Mutation {
     createMaintenanceRecord(input: MaintenanceRecordInput!): MaintenanceRecord!
     completeMaintenance(input: CompleteMaintenanceInput!): MaintenanceRecord!
     updateMaintenanceRecord(input: UpdateMaintenanceRecordInput!): MaintenanceRecord!
+    createProvider(name: String!): Provider!
+    acknowledgeLostAssetReport(id: ID!): LostAssetReport!
 }
 
 type LoginPayload {
@@ -121,11 +125,28 @@ type AssetModelMetrics {
 type MaintenanceRecord {
     id: ID!
     asset: Asset
+    provider: Provider
     providerName: String
     reason: String
     cost: Float
     startDate: String
     endDate: String
+}
+
+type Provider {
+    id: ID!
+    name: String!
+    active: Boolean!
+}
+
+type LostAssetReport {
+    id: ID!
+    asset: Asset!
+    loan: Loan
+    reportedByUser: User
+    reportedAt: String!
+    notes: String
+    acknowledged: Boolean!
 }
 
 input AssetInput {
@@ -135,6 +156,15 @@ input AssetInput {
     status: String!
     purchaseDate: String
     stockQuantity: Int
+    loanTechnicianId: ID
+    loanStartDate: String
+    loanDueDate: String
+    loanStartTime: String
+    loanEndTime: String
+    maintenanceReason: String
+    maintenanceCost: Float
+    maintenanceProviderName: String
+    lostNotes: String
 }
 
 input UpdateAssetInput {
@@ -145,6 +175,15 @@ input UpdateAssetInput {
     status: String!
     purchaseDate: String
     stockQuantity: Int
+    loanTechnicianId: ID
+    loanStartDate: String
+    loanDueDate: String
+    loanStartTime: String
+    loanEndTime: String
+    maintenanceReason: String
+    maintenanceCost: Float
+    maintenanceProviderName: String
+    lostNotes: String
 }
 
 input UserInput {
@@ -170,6 +209,7 @@ input CompleteMaintenanceInput {
 
 input UpdateMaintenanceRecordInput {
     recordId: ID!
+    providerId: ID
     providerName: String
     reason: String
     cost: Float
@@ -188,6 +228,9 @@ input BulkUploadInput {
 input RequestLoanInput {
     assetId: ID!
     dueDate: String!
+    startDate: String
+    startTime: String
+    endTime: String
 }
 
 input ApproveLoanInput {
@@ -202,10 +245,13 @@ input RejectLoanInput {
 input ReturnLoanInput {
     loanId: ID!
     condition: ReturnCondition!
+    damageDescription: String
+    notes: String
 }
 
 input MaintenanceRecordInput {
     assetId: ID!
+    providerId: ID
     providerName: String
     reason: String
     cost: Float

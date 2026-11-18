@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 
 import com.globalnet.assetguard.domain.model.Asset;
 import com.globalnet.assetguard.domain.model.MaintenanceRecord;
+import com.globalnet.assetguard.domain.model.Provider;
 import com.globalnet.assetguard.domain.ports.output.AssetRepositoryPort;
 import com.globalnet.assetguard.domain.ports.output.MaintenanceRecordRepositoryPort;
 import java.time.LocalDate;
@@ -37,10 +38,12 @@ class MaintenanceRecordUseCaseTest {
     @Test
     void updatesOpenRecordWithoutChangingMaintenanceStatus() {
         Asset asset = Asset.builder().id(4L).status("UNDER_MAINTENANCE").build();
+        Provider oldProvider = Provider.builder().id(1L).name("Old provider").build();
+        Provider newProvider = Provider.builder().id(2L).name("New provider").build();
         MaintenanceRecord record = MaintenanceRecord.builder()
                 .id(7L)
                 .asset(asset)
-                .providerName("Old provider")
+                .provider(oldProvider)
                 .reason("Old failure")
                 .cost(50.0)
                 .build();
@@ -49,12 +52,12 @@ class MaintenanceRecordUseCaseTest {
         when(maintenanceRecordRepositoryPort.save(record)).thenReturn(record);
 
         MaintenanceRecord updated = maintenanceRecordUseCase.update(7L, MaintenanceRecord.builder()
-                .providerName("New provider")
+                .provider(newProvider)
                 .reason("New failure")
                 .cost(75.0)
                 .build());
 
-        assertEquals("New provider", updated.getProviderName());
+        assertEquals(newProvider, updated.getProvider());
         assertEquals("New failure", updated.getReason());
         assertEquals(75.0, updated.getCost());
         assertEquals("UNDER_MAINTENANCE", asset.getStatus());

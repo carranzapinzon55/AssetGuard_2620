@@ -29,31 +29,55 @@ public class LoanUseCase {
     private final UserRepositoryPort userRepositoryPort;
     private final MaintenanceRecordRepositoryPort maintenanceRecordRepositoryPort;
     private final AuditLogUseCase auditLogUseCase;
+    private final LostAssetReportUseCase lostAssetReportUseCase;
 
     public LoanUseCase(
             LoanRepositoryPort loanRepositoryPort,
             AssetRepositoryPort assetRepositoryPort,
             UserRepositoryPort userRepositoryPort,
             MaintenanceRecordRepositoryPort maintenanceRecordRepositoryPort,
-            AuditLogUseCase auditLogUseCase) {
+            AuditLogUseCase auditLogUseCase,
+            LostAssetReportUseCase lostAssetReportUseCase) {
         this.loanRepositoryPort = loanRepositoryPort;
         this.assetRepositoryPort = assetRepositoryPort;
         this.userRepositoryPort = userRepositoryPort;
         this.maintenanceRecordRepositoryPort = maintenanceRecordRepositoryPort;
         this.auditLogUseCase = auditLogUseCase;
+        this.lostAssetReportUseCase = lostAssetReportUseCase;
     }
 
     @Transactional
     public Loan requestLoan(Long userId, Long assetId, LocalDate dueDate) {
+        return requestLoan(userId, assetId, dueDate, null, null, null);
+    }
+
+    @Transactional
+    public Loan requestLoan(Long userId, Long assetId, LocalDate dueDate, LocalDate startDate, String startTime, String endTime) {
         if (userId == null || assetId == null || dueDate == null) {
             throw new IllegalArgumentException("User ID, asset ID, and due date are required");
         }
-        if (dueDate.isBefore(LocalDate.now())) {
-            throw new IllegalArgumentException("Due date must not be in the past");
+        LocalDate effectiveStartDate = startDate != null ? startDate : LocalDate.now();
+        LocalDate today = LocalDate.now();
+        if (effectiveStartDate.isBefore(today)) {
+            throw new IllegalArgumentException("Start date must not be in the past");
+        }
+        if (dueDate.isBefore(effectiveStartDate)) {
+            throw new IllegalArgumentException("Due date must not be before start date");
+        }
+
+        String sTime = (startTime != null && !startTime.isBlank()) ? startTime : "08:00";
+        String eTime = (endTime != null && !endTime.isBlank()) ? endTime : "18:00";
+        java.time.LocalTime parsedStartTime = java.time.LocalTime.parse(sTime);
+        java.time.LocalTime parsedEndTime = java.time.LocalTime.parse(eTime);
+
+        if (dueDate.isEqual(effectiveStartDate)) {
+            long minutes = java.time.Duration.between(parsedStartTime, parsedEndTime).toMinutes();
+            if (minutes < 60) {
+                throw new IllegalArgumentException("Loan duration must be at least 1 hour");
+            }
         }
 
         User user = requireActiveUserWithRole(userId, "TECHNICIAN");
-        LocalDate today = LocalDate.now();
         List<Loan> overdueLoans = loanRepositoryPort.findByUserId(userId).stream()
             .filter(loan -> loan.getStatus() == Loan.Status.APPROVED
                 && loan.getDueLocalDate() != null
@@ -72,10 +96,12 @@ public class LoanUseCase {
             throw new IllegalStateException("Asset is not available for loan");
         }
 
+        LocalDateTime startDateTime = effectiveStartDate.atTime(parsedStartTime);
+
         Loan loan = Loan.builder()
                 .user(user)
                 .asset(asset)
-                .requestDate(LocalDateTime.now())
+                .requestDate(startDateTime)
                 .dueLocalDate(dueDate)
                 .status(Loan.Status.PENDING)
                 .delayDays(0)
@@ -128,31 +154,91 @@ public class LoanUseCase {
     }
 
     @Transactional
+    public Loan createApprovedLoan(
+            Long assetId,
+            Long technicianId,
+            Long inspectorId,
+            LocalDate startDate,
+            LocalDate dueDate,
+            String startTime,
+            String endTime) {
+        if (assetId == null || technicianId == null || dueDate == null) {
+            throw new IllegalArgumentException("assetId, technicianId, and dueDate are required");
+        }
+        User technician = requireActiveUserWithRole(technicianId, "TECHNICIAN");
+        User inspector = inspectorId != null ? userRepositoryPort.findById(inspectorId).orElse(null) : null;
+        Asset asset = requireAsset(assetId);
+
+        LocalDate start = startDate != null ? startDate : LocalDate.now();
+        String sTime = (startTime != null && !startTime.isBlank()) ? startTime : "08:00";
+        LocalDateTime startDateTime = start.atTime(java.time.LocalTime.parse(sTime));
+
+        String previousStatus = asset.getStatus();
+        asset.setStatus("LOANED");
+        assetRepositoryPort.save(asset);
+
+        Loan loan = Loan.builder()
+                .asset(asset)
+                .user(technician)
+                .inspector(inspector)
+                .requestDate(startDateTime)
+                .dueLocalDate(dueDate)
+                .status(Loan.Status.APPROVED)
+                .delayDays(0)
+                .build();
+        Loan savedLoan = loanRepositoryPort.save(loan);
+        auditLogUseCase.record("LOAN_APPROVED", "LOAN", savedLoan.getId(),
+                "Préstamo directo asignado y aprobado para " + technician.getFullName());
+        recordAssetStatusChange(asset, previousStatus);
+        return savedLoan;
+    }
+
+    @Transactional
     public Loan returnAsset(Long loanId, Loan.ReturnCondition condition) {
-        return returnAssetInternal(loanId, condition, null);
+        return returnAssetInternal(loanId, condition, null, null);
+    }
+
+    @Transactional
+    public Loan returnAsset(Long loanId, Loan.ReturnCondition condition, String damageDescription) {
+        return returnAssetInternal(loanId, condition, null, damageDescription);
     }
 
     @Transactional
     public Loan returnAsset(Long loanId, Loan.ReturnCondition condition, Long borrowerId) {
+        return returnAsset(loanId, condition, borrowerId, null);
+    }
+
+    @Transactional
+    public Loan returnAsset(Long loanId, Loan.ReturnCondition condition, Long borrowerId, String damageDescription) {
         if (borrowerId == null) {
             throw new IllegalArgumentException("Borrower ID is required");
         }
-        return returnAssetInternal(loanId, condition, borrowerId);
+        return returnAssetInternal(loanId, condition, borrowerId, damageDescription);
     }
 
     @Transactional
     public Loan returnAssetAsInspector(Long loanId, Loan.ReturnCondition condition, Long inspectorId) {
+        return returnAssetAsInspector(loanId, condition, inspectorId, null);
+    }
+
+    @Transactional
+    public Loan returnAssetAsInspector(Long loanId, Loan.ReturnCondition condition, Long inspectorId, String damageDescription) {
         requireActiveUserWithRole(inspectorId, "INSPECTOR");
-        return returnAssetInternal(loanId, condition, null);
+        return returnAssetInternal(loanId, condition, null, damageDescription);
     }
 
     @Transactional
     public Loan returnAssetAsAdmin(Long loanId, Loan.ReturnCondition condition, Long adminId) {
-        requireActiveUserWithRole(adminId, "ADMIN");
-        return returnAssetInternal(loanId, condition, null);
+        return returnAssetAsAdmin(loanId, condition, adminId, null);
     }
 
-    private Loan returnAssetInternal(Long loanId, Loan.ReturnCondition condition, Long borrowerId) {
+    @Transactional
+    public Loan returnAssetAsAdmin(Long loanId, Loan.ReturnCondition condition, Long adminId, String damageDescription) {
+        requireActiveUserWithRole(adminId, "ADMIN");
+        return returnAssetInternal(loanId, condition, null, damageDescription);
+    }
+
+    private Loan returnAssetInternal(Long loanId, Loan.ReturnCondition condition, Long borrowerId, String damageDescription) {
         if (condition == null) {
             throw new IllegalArgumentException("Return condition is required");
         }
@@ -178,13 +264,23 @@ public class LoanUseCase {
         assetRepositoryPort.save(asset);
 
         if (condition == Loan.ReturnCondition.DAMAGED) {
+            String reason = (damageDescription != null && !damageDescription.isBlank())
+                    ? damageDescription.trim()
+                    : "Daño reportado al devolver el préstamo " + loan.getId();
             MaintenanceRecord maintenanceRecord = maintenanceRecordRepositoryPort.save(MaintenanceRecord.builder()
                 .asset(asset)
-                .reason("Daño reportado al devolver el préstamo " + loan.getId())
+                .reason(reason)
+                .cost(null)
                 .startDate(today)
                 .build());
             auditLogUseCase.record("MAINTENANCE_OPENED", "MAINTENANCE", maintenanceRecord.getId(),
-                "Intervención abierta por devolución dañada del activo " + asset.getId());
+                "Intervención abierta por devolución dañada del activo " + asset.getId() + ": " + reason);
+        } else if (condition == Loan.ReturnCondition.LOST) {
+            String notes = (damageDescription != null && !damageDescription.isBlank())
+                    ? damageDescription.trim()
+                    : "Equipo reportado no localizado al registrar devolución del préstamo " + loan.getId();
+            Long reporterId = borrowerId != null ? borrowerId : (loan.getUser() != null ? loan.getUser().getId() : null);
+            lostAssetReportUseCase.reportLost(asset.getId(), loan.getId(), reporterId, notes);
         }
 
         loan.setReturnCondition(condition);

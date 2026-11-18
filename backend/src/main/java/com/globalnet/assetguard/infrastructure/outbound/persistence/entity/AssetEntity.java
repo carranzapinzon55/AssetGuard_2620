@@ -39,6 +39,14 @@ public class AssetEntity {
     @Column(name = "purchase_date")
     private LocalDate purchaseDate;
 
-    @Column(name = "stock_quantity")
-    private Integer stockQuantity;
+    @Column(name = "stock_quantity", nullable = false)
+    @Builder.Default
+    private Integer stockQuantity = 1;
+
+    @jakarta.persistence.PrePersist
+    public void prePersist() {
+        if (stockQuantity == null) {
+            stockQuantity = 1;
+        }
+    }
 }

@@ -85,7 +85,7 @@ public class LoanGraphQLController {
         } catch (java.time.format.DateTimeParseException ignored) {
             try {
                 LocalDate date = LocalDate.parse(value);
-                return endOfDay ? date.plusDays(1).atStartOfDay().minusNanos(1) : date.atStartOfDay();
+                return endOfDay ? date.atTime(23, 59, 59, 999_999_000) : date.atStartOfDay();
             } catch (java.time.format.DateTimeParseException exception) {
                 throw new IllegalArgumentException(
                         "Date must use an ISO-8601 local date or date-time format.", exception);
@@ -104,10 +104,16 @@ public class LoanGraphQLController {
     @MutationMapping
     @PreAuthorize("hasRole('TECHNICIAN')")
     public GraphQLViews.LoanView requestLoan(@Argument("input") RequestLoanInput input) {
+        LocalDate startDate = input.startDate() != null && !input.startDate().isBlank()
+                ? LocalDate.parse(input.startDate())
+                : null;
         return GraphQLViews.LoanView.from(loanUseCase.requestLoan(
                 currentAuthenticatedUser.requirePrincipal().userId(),
                 input.assetId(),
-                LocalDate.parse(input.dueDate())));
+                LocalDate.parse(input.dueDate()),
+                startDate,
+                input.startTime(),
+                input.endTime()));
     }
 
     @MutationMapping
@@ -129,19 +135,20 @@ public class LoanGraphQLController {
     @PreAuthorize("hasAnyRole('ADMIN', 'TECHNICIAN', 'INSPECTOR')")
     public GraphQLViews.LoanView returnLoan(@Argument("input") ReturnLoanInput input) {
         Long actorId = currentAuthenticatedUser.requirePrincipal().userId();
+        String description = input.damageDescription() != null ? input.damageDescription() : input.notes();
         if (isInspector()) {
             return GraphQLViews.LoanView.from(
-                    loanUseCase.returnAssetAsInspector(input.loanId(), input.condition(), actorId));
+                    loanUseCase.returnAssetAsInspector(input.loanId(), input.condition(), actorId, description));
         }
         if (org.springframework.security.core.context.SecurityContextHolder.getContext()
                 .getAuthentication().getAuthorities().stream()
                 .anyMatch(authority -> "ROLE_ADMIN".equals(authority.getAuthority()))) {
             return GraphQLViews.LoanView.from(
-                    loanUseCase.returnAssetAsAdmin(input.loanId(), input.condition(), actorId));
+                    loanUseCase.returnAssetAsAdmin(input.loanId(), input.condition(), actorId, description));
         }
         return GraphQLViews.LoanView.from(loanUseCase.returnAsset(
-                input.loanId(), input.condition(), actorId));
-        }
+                input.loanId(), input.condition(), actorId, description));
+    }
 
     private boolean isInspector() {
         return org.springframework.security.core.context.SecurityContextHolder.getContext()
@@ -149,7 +156,12 @@ public class LoanGraphQLController {
                 .anyMatch(authority -> "ROLE_INSPECTOR".equals(authority.getAuthority()));
     }
 
-    public record RequestLoanInput(Long assetId, String dueDate) {
+    public record RequestLoanInput(
+            Long assetId,
+            String dueDate,
+            String startDate,
+            String startTime,
+            String endTime) {
     }
 
     public record ApproveLoanInput(Long loanId) {
@@ -158,6 +170,10 @@ public class LoanGraphQLController {
     public record RejectLoanInput(Long loanId, String reason) {
     }
 
-    public record ReturnLoanInput(Long loanId, Loan.ReturnCondition condition) {
+    public record ReturnLoanInput(
+            Long loanId,
+            Loan.ReturnCondition condition,
+            String damageDescription,
+            String notes) {
     }
 }

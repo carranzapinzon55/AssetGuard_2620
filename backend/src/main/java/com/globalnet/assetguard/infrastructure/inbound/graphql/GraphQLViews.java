@@ -100,6 +100,7 @@ public final class GraphQLViews {
     public record MaintenanceRecordView(
             Long id,
             AssetView asset,
+            ProviderView provider,
             String providerName,
             String reason,
             Double cost,
@@ -111,11 +112,38 @@ public final class GraphQLViews {
                     : new MaintenanceRecordView(
                             record.getId(),
                             AssetView.from(record.getAsset()),
-                            record.getProviderName(),
+                            record.getProvider() == null ? null : ProviderView.from(record.getProvider()),
+                            record.getProvider() == null ? null : record.getProvider().getName(),
                             record.getReason(),
                             record.getCost(),
                             record.getStartDate() == null ? null : record.getStartDate().toString(),
                             record.getEndDate() == null ? null : record.getEndDate().toString());
+        }
+    }
+
+    public record ProviderView(Long id, String name, Boolean active) {
+        public static ProviderView from(com.globalnet.assetguard.domain.model.Provider provider) {
+            return provider == null ? null : new ProviderView(provider.getId(), provider.getName(), provider.getActive());
+        }
+    }
+
+    public record LostAssetReportView(
+            Long id,
+            AssetView asset,
+            LoanView loan,
+            UserView reportedByUser,
+            String reportedAt,
+            String notes,
+            Boolean acknowledged) {
+        public static LostAssetReportView from(com.globalnet.assetguard.domain.model.LostAssetReport report) {
+            return report == null ? null : new LostAssetReportView(
+                    report.getId(),
+                    AssetView.from(report.getAsset()),
+                    LoanView.from(report.getLoan()),
+                    UserView.from(report.getReportedByUser()),
+                    report.getReportedAt() == null ? null : report.getReportedAt().toString(),
+                    report.getNotes(),
+                    report.getAcknowledged());
         }
     }
 }

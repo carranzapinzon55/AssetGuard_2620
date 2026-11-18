@@ -71,13 +71,40 @@ class AssetUseCaseTest {
     }
 
     @Test
-    void registerRejectsEstimatedValuesBelowTenDollars() {
+    void registerRejectsEstimatedValuesBelowMinimum() {
         Asset request = Asset.builder()
                 .model("HP EliteBook")
-                .estimatedValue(9.99)
+                .estimatedValue(0.24)
                 .status("AVAILABLE")
                 .build();
 
         assertThrows(IllegalArgumentException.class, () -> assetUseCase.register(request));
+    }
+
+    @Test
+    void registerAcceptsMinimumEstimatedValue() {
+        Asset request = Asset.builder()
+                .model("HP EliteBook")
+                .estimatedValue(0.25)
+                .status("AVAILABLE")
+                .build();
+        when(assetRepositoryPort.save(any(Asset.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Asset saved = assetUseCase.register(request);
+        assertEquals(0.25, saved.getEstimatedValue());
+        assertEquals(1, saved.getStockQuantity());
+    }
+
+    @Test
+    void registerDefaultsStockQuantityToOneWhenNull() {
+        Asset request = Asset.builder()
+                .model("HP EliteBook")
+                .status("AVAILABLE")
+                .stockQuantity(null)
+                .build();
+        when(assetRepositoryPort.save(any(Asset.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Asset saved = assetUseCase.register(request);
+        assertEquals(1, saved.getStockQuantity());
     }
 }

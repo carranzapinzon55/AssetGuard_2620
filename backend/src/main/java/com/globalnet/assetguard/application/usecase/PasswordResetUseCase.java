@@ -1,6 +1,8 @@
 package com.globalnet.assetguard.application.usecase;
 
+import com.globalnet.assetguard.domain.model.PasswordResetToken;
 import com.globalnet.assetguard.domain.model.User;
+import com.globalnet.assetguard.domain.ports.output.PasswordResetTokenRepositoryPort;
 import com.globalnet.assetguard.domain.ports.output.UserRepositoryPort;
 import java.time.LocalDateTime;
 import java.util.Locale;
@@ -17,9 +19,12 @@ public class PasswordResetUseCase {
     private static final long TOKEN_LIFETIME_MINUTES = 30;
 
     private final UserRepositoryPort userRepositoryPort;
+    private final PasswordResetTokenRepositoryPort passwordResetTokenRepositoryPort;
 
-    public PasswordResetUseCase(UserRepositoryPort userRepositoryPort) {
+    public PasswordResetUseCase(UserRepositoryPort userRepositoryPort,
+                                PasswordResetTokenRepositoryPort passwordResetTokenRepositoryPort) {
         this.userRepositoryPort = userRepositoryPort;
+        this.passwordResetTokenRepositoryPort = passwordResetTokenRepositoryPort;
     }
 
     @Transactional
@@ -34,9 +39,15 @@ public class PasswordResetUseCase {
 
     private void issueToken(User user, String email) {
         String token = UUID.randomUUID().toString();
-        user.setPasswordResetToken(token);
-        user.setPasswordResetTokenExpiresAt(LocalDateTime.now().plusMinutes(TOKEN_LIFETIME_MINUTES));
-        userRepositoryPort.save(user);
+        LocalDateTime expiresAt = LocalDateTime.now().plusMinutes(TOKEN_LIFETIME_MINUTES);
+
+        passwordResetTokenRepositoryPort.save(PasswordResetToken.builder()
+                .userId(user.getId())
+                .token(token)
+                .expiresAt(expiresAt)
+                .used(false)
+                .build());
+
         logger.info("Simulated password recovery email to {} with token {}", email, token);
     }
 }

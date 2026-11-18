@@ -79,7 +79,7 @@ public class MaintenanceRecordUseCase {
             throw new IllegalStateException("Completed maintenance records cannot be updated");
         }
         validateCost(changes.getCost());
-        if (changes.getProviderName() == null && changes.getReason() == null && changes.getCost() == null) {
+        if (changes.getProvider() == null && changes.getReason() == null && changes.getCost() == null) {
             throw new IllegalArgumentException("At least one maintenance field must be provided");
         }
         if (record.getAsset() == null || record.getAsset().getId() == null) {
@@ -92,8 +92,8 @@ public class MaintenanceRecordUseCase {
             throw new IllegalStateException("Asset is not under maintenance");
         }
 
-        if (changes.getProviderName() != null) {
-            record.setProviderName(changes.getProviderName());
+        if (changes.getProvider() != null) {
+            record.setProvider(changes.getProvider());
         }
         if (changes.getReason() != null) {
             record.setReason(changes.getReason());

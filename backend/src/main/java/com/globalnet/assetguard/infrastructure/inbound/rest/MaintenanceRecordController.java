@@ -3,6 +3,7 @@ package com.globalnet.assetguard.infrastructure.inbound.rest;
 import com.globalnet.assetguard.application.usecase.MaintenanceRecordUseCase;
 import com.globalnet.assetguard.domain.model.Asset;
 import com.globalnet.assetguard.domain.model.MaintenanceRecord;
+import com.globalnet.assetguard.domain.model.Provider;
 import com.globalnet.assetguard.infrastructure.inbound.rest.dto.MaintenanceRecordRequestDto;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -28,9 +29,15 @@ public class MaintenanceRecordController {
     @PreAuthorize("hasAnyRole('ADMIN', 'INSPECTOR')")
     public ResponseEntity<MaintenanceRecord> registerMaintenanceRecord(
             @RequestBody MaintenanceRecordRequestDto request) {
+        Provider provider = request.getProviderId() != null
+                ? Provider.builder().id(request.getProviderId()).build()
+                : (request.getProviderName() != null && !request.getProviderName().isBlank()
+                        ? Provider.builder().name(request.getProviderName().trim()).build()
+                        : null);
+
         MaintenanceRecord maintenanceRecord = MaintenanceRecord.builder()
                 .asset(request.getAssetId() == null ? null : Asset.builder().id(request.getAssetId()).build())
-                .providerName(request.getProviderName())
+                .provider(provider)
                 .reason(request.getReason())
                 .cost(request.getCost())
                 .startDate(request.getStartDate())
@@ -46,14 +53,20 @@ public class MaintenanceRecordController {
     public ResponseEntity<MaintenanceRecord> updateMaintenanceRecord(
             @PathVariable Long recordId,
             @RequestBody MaintenanceRecordUpdateRequest request) {
+        Provider provider = request.providerId() != null
+                ? Provider.builder().id(request.providerId()).build()
+                : (request.providerName() != null && !request.providerName().isBlank()
+                        ? Provider.builder().name(request.providerName().trim()).build()
+                        : null);
+
         MaintenanceRecord changes = MaintenanceRecord.builder()
-                .providerName(request.providerName())
+                .provider(provider)
                 .reason(request.reason())
                 .cost(request.cost())
                 .build();
         return ResponseEntity.ok(maintenanceRecordUseCase.update(recordId, changes));
     }
 
-    public record MaintenanceRecordUpdateRequest(String providerName, String reason, Double cost) {
+    public record MaintenanceRecordUpdateRequest(Long providerId, String providerName, String reason, Double cost) {
     }
 }

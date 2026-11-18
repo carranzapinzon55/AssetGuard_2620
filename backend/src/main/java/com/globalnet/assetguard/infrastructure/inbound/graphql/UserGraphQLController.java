@@ -64,8 +64,8 @@ public class UserGraphQLController {
 
     private int normalizeLimit(Integer limit) {
         int value = limit == null ? 10 : limit;
-        if (value != 10 && value != 25 && value != 50) {
-            throw new IllegalArgumentException("limit must be one of 10, 25, or 50");
+        if (value < 1 || value > 200) {
+            throw new IllegalArgumentException("limit must be between 1 and 200");
         }
         return value;
     }

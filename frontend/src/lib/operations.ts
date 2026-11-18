@@ -18,7 +18,7 @@ export const UPDATE_USER = `
 
 export const ASSETS_QUERY = `
   query Assets($limit: Int = 50) {
-    assets(limit: $limit) { id serialNumber model estimatedValue status purchaseDate }
+    assets(limit: $limit) { id serialNumber model estimatedValue status purchaseDate stockQuantity }
   }
 `;
 
@@ -30,13 +30,13 @@ export const ASSETS_CATALOG_QUERY = `
 
 export const CREATE_ASSET = `
   mutation CreateAsset($input: AssetInput!) {
-    createAsset(input: $input) { id serialNumber model estimatedValue status purchaseDate }
+    createAsset(input: $input) { id serialNumber model estimatedValue status purchaseDate stockQuantity }
   }
 `;
 
 export const UPDATE_ASSET = `
   mutation UpdateAsset($input: UpdateAssetInput!) {
-    updateAsset(input: $input) { id serialNumber model estimatedValue status purchaseDate }
+    updateAsset(input: $input) { id serialNumber model estimatedValue status purchaseDate stockQuantity }
   }
 `;
 
@@ -116,6 +116,23 @@ export const COMPLETE_MAINTENANCE = `
   }
 `;
 
+export const UPDATE_MAINTENANCE = `
+  mutation UpdateMaintenanceRecord($input: UpdateMaintenanceRecordInput!) {
+    updateMaintenanceRecord(input: $input) {
+      id providerName reason cost startDate endDate
+      asset { id serialNumber model status }
+    }
+  }
+`;
+
+export const CREATE_PROVIDER = `
+  mutation CreateProvider($name: String!) {
+    createProvider(name: $name) {
+      id name active
+    }
+  }
+`;
+
 export const UPLOAD_ASSETS = `
   mutation UploadAssetsBulk($input: BulkUploadInput!) {
     uploadAssetsBulk(input: $input) {
@@ -145,6 +162,35 @@ export const DASHBOARD_QUERY = `
       estimatedLossValue maintenanceCostsValue onTimeReturnPercentage assetsCurrentlyInField
       totalAssets availableAssets assetsUnderMaintenance lostAssets
       assetsByModel { model total available }
+    }
+  }
+`;
+
+export const PROVIDERS_QUERY = `
+  query Providers {
+    providers { id name active }
+  }
+`;
+
+export const LOST_ASSET_REPORTS_QUERY = `
+  query LostAssetReports {
+    lostAssetReports {
+      id
+      reportedAt
+      notes
+      acknowledged
+      asset { id serialNumber model status }
+      loan { id dueLocalDate status }
+      reportedByUser { id fullName email role }
+    }
+  }
+`;
+
+export const ACKNOWLEDGE_LOST_REPORT = `
+  mutation AcknowledgeLostAssetReport($id: ID!) {
+    acknowledgeLostAssetReport(id: $id) {
+      id
+      acknowledged
     }
   }
 `;

@@ -31,8 +31,9 @@ public class MaintenanceRecordEntity {
     @JoinColumn(name = "asset_id")
     private AssetEntity asset;
 
-    @Column(name = "provider_name")
-    private String providerName;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "provider_id")
+    private ProviderEntity provider;
 
     @Column(name = "reason")
     private String reason;

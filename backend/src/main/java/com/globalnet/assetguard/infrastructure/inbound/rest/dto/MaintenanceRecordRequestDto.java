@@ -13,6 +13,7 @@ import lombok.NoArgsConstructor;
 public class MaintenanceRecordRequestDto {
 
     private Long assetId;
+    private Long providerId;
     private String providerName;
     private String reason;
     private Double cost;

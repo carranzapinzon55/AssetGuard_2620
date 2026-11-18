@@ -44,6 +44,9 @@ class LoanUseCaseTest {
     @Mock
     private AuditLogUseCase auditLogUseCase;
 
+    @Mock
+    private LostAssetReportUseCase lostAssetReportUseCase;
+
     @InjectMocks
     private LoanUseCase loanUseCase;
 
@@ -165,6 +168,72 @@ class LoanUseCaseTest {
         assertEquals(Loan.ReturnCondition.GOOD, result.getReturnCondition());
         verify(auditLogUseCase).record("LOAN_RETURNED", "LOAN", 40L,
             "Devolución registrada con condición GOOD");
+    }
+
+    @Test
+    void returnAssetDamagedWithDescriptionOpensMaintenanceRecord() {
+        Loan approvedLoan = Loan.builder()
+                .id(40L)
+                .status(Loan.Status.APPROVED)
+                .asset(Asset.builder().id(30L).build())
+                .build();
+        when(userRepositoryPort.findById(30L)).thenReturn(Optional.of(admin));
+        when(loanRepositoryPort.findById(40L)).thenReturn(Optional.of(approvedLoan));
+        when(assetRepositoryPort.findById(30L)).thenReturn(Optional.of(availableAsset));
+        when(assetRepositoryPort.save(any(Asset.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(loanRepositoryPort.save(any(Loan.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(maintenanceRecordRepositoryPort.save(any(MaintenanceRecord.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        loanUseCase.returnAssetAsAdmin(40L, Loan.ReturnCondition.DAMAGED, 30L, "Pantalla rota por impacto");
+
+        ArgumentCaptor<MaintenanceRecord> captor = ArgumentCaptor.forClass(MaintenanceRecord.class);
+        verify(maintenanceRecordRepositoryPort).save(captor.capture());
+        assertEquals("Pantalla rota por impacto", captor.getValue().getReason());
+        assertNull(captor.getValue().getCost());
+    }
+
+    @Test
+    void returnAssetLostCreatesLostAssetReport() {
+        Loan approvedLoan = Loan.builder()
+                .id(40L)
+                .status(Loan.Status.APPROVED)
+                .asset(Asset.builder().id(30L).build())
+                .user(technician)
+                .build();
+        when(userRepositoryPort.findById(30L)).thenReturn(Optional.of(admin));
+        when(loanRepositoryPort.findById(40L)).thenReturn(Optional.of(approvedLoan));
+        when(assetRepositoryPort.findById(30L)).thenReturn(Optional.of(availableAsset));
+        when(assetRepositoryPort.save(any(Asset.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(loanRepositoryPort.save(any(Loan.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        loanUseCase.returnAssetAsAdmin(40L, Loan.ReturnCondition.LOST, 30L, "Equipo extraviado en ruta");
+
+        verify(lostAssetReportUseCase).reportLost(eq(30L), eq(40L), any(), eq("Equipo extraviado en ruta"));
+    }
+
+    @Test
+    void requestLoanValidatesCustomStartDate() {
+        when(userRepositoryPort.findById(10L)).thenReturn(Optional.of(technician));
+        when(loanRepositoryPort.findByUserId(10L)).thenReturn(java.util.List.of());
+        when(loanRepositoryPort.hasOverdueApprovedLoan(eq(10L), any())).thenReturn(false);
+        when(assetRepositoryPort.findById(30L)).thenReturn(Optional.of(availableAsset));
+        when(loanRepositoryPort.save(any(Loan.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        LocalDate startDate = LocalDate.now().plusDays(2);
+        LocalDate dueDate = startDate.plusDays(3);
+
+        Loan loan = loanUseCase.requestLoan(10L, 30L, dueDate, startDate, "09:00", "17:00");
+
+        assertEquals(startDate.atTime(9, 0), loan.getRequestDate());
+        assertEquals(dueDate, loan.getDueLocalDate());
+    }
+
+    @Test
+    void requestLoanRejectsDurationShorterThanOneHourOnSameDay() {
+        LocalDate sameDay = LocalDate.now().plusDays(1);
+        assertThrows(IllegalArgumentException.class,
+                () -> loanUseCase.requestLoan(10L, 30L, sameDay, sameDay, "10:00", "10:30"));
     }
 
     private Loan pendingLoan() {

@@ -30,7 +30,7 @@
 .work-textarea { height: auto; min-height: 112px; padding: 10px; resize: vertical; line-height: 1.5; }
 .combobox-root { position: relative; width: 100%; }
 .combobox-input { cursor: text; }
-.combobox-list { position: absolute; z-index: 30; top: calc(100% + 4px); right: 0; left: 0; max-height: 220px; overflow-y: auto; padding: 4px; border: 1px solid #dfe5df; border-radius: 5px; background: #fff; box-shadow: 0 12px 28px rgb(15 23 42 / 14%); }
+.combobox-list { position: absolute; z-index: 1050; top: calc(100% + 4px); right: 0; left: 0; max-height: 220px; overflow-y: auto; padding: 4px; border: 1px solid #dfe5df; border-radius: 5px; background: #fff; box-shadow: 0 12px 28px rgb(15 23 42 / 14%); }
 .combobox-option, .combobox-empty { min-height: 34px; padding: 9px 10px; border-radius: 3px; color: #334139; font-size: 11px; line-height: 1.35; }
 .combobox-option { cursor: pointer; }
 .combobox-option:hover, .combobox-option[aria-selected="true"] { background: #edf5ef; color: #205849; }
@@ -160,8 +160,8 @@ html.dark .character-counter.met { color: #6ee7b7; }
 .form-grid { display: grid; gap: 12px; }
 .form-grid.two-col { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .form-hint { margin: -2px 0 0; color: #64748b; font-size: 9px; line-height: 1.55; }
-.modal-backdrop { position: fixed; z-index: 20; inset: 0; display: grid; place-items: center; overflow-y: auto; padding: 20px; background: rgb(18 37 29 / 42%); backdrop-filter: blur(2px); }
-.work-modal { width: min(480px, 100%); max-height: min(90svh, 760px); overflow-y: auto; padding: 22px; border: 1px solid #e2e8e0; border-radius: 7px; background: #fbfcf9; box-shadow: 0 20px 70px rgb(17 42 30 / 18%); animation: modal-enter 180ms ease-out both; }
+.modal-backdrop { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 1.25rem; overflow: hidden; background: rgb(18 37 29 / 42%); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
+.work-modal { width: min(480px, 100%); max-height: 90vh; overflow-y: auto; margin: auto; padding: 22px; border: 1px solid #e2e8e0; border-radius: 7px; background: #fbfcf9; box-shadow: 0 20px 70px rgb(17 42 30 / 18%); animation: modal-enter 180ms ease-out both; }
 @keyframes modal-enter { from { opacity: 0; transform: scale(.98); } to { opacity: 1; transform: scale(1); } }
 .user-form-modal { width: min(520px, 100%); }
 .user-form { overflow-y: auto; }
@@ -334,6 +334,7 @@ html.dark .work-input, html.dark .search-control,
 html.dark .workspace-tool-button, html.dark .secondary-button { border-color: #475569; background: #0f172a; color: #cbd5e1; }
 html.dark .work-textarea { background: #0f172a; color: #cbd5e1; }
 html.dark .search-control input, html.dark .work-input { color: #cbd5e1; }
+html.dark .work-input option { background: #0f172a; color: #cbd5e1; }
 html.dark .combobox-list { border-color: #475569; background: #0f172a; }
 html.dark .combobox-option, html.dark .combobox-empty { color: #cbd5e1; }
 html.dark .combobox-option:hover, html.dark .combobox-option[aria-selected="true"] { background: #173a35; color: #b6e2c6; }
@@ -366,7 +367,7 @@ html.dark .modal-backdrop { background: rgb(2 6 23 / 74%); }
   transition: background-color 300ms ease-in-out, color 300ms ease-in-out,
     border-color 300ms ease-in-out, box-shadow 300ms ease-in-out, transform 300ms ease-in-out;
 }
-.confirmation-backdrop { z-index: 30; }
+.confirmation-backdrop { z-index: 1100; }
 .confirm-dialog { width: min(440px, 100%); }
 .detail-dialog { width: min(560px, 100%); }
 

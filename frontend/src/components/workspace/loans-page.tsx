@@ -6,7 +6,7 @@ import { CalendarClock, Check, ChevronDown, CircleAlert, ClipboardList, Laptop, 
 import { motion } from "framer-motion";
 import { useAuth } from "@/components/auth-provider";
 import { Combobox } from "@/components/workspace/combobox";
-import { Button, ConfirmDialog, CopyButton, DataTable, Dialog, EmptyState, Feedback, FormField, LoadingRows, PageTitle, PaginationControls, SelectInput, StatusTag, TextInput, useEscapeKey, useModalFocus } from "@/components/workspace/ui";
+import { Button, ConfirmDialog, CopyButton, DataTable, Dialog, EmptyState, Feedback, FormField, LoadingRows, ModalPortal, PageTitle, PaginationControls, SelectInput, StatusTag, TextInput, useEscapeKey, useModalFocus } from "@/components/workspace/ui";
 import { APPROVE_LOAN, ASSETS_CATALOG_QUERY, LOANS_QUERY, MY_LOAN_HISTORY, REJECT_LOAN, REQUEST_LOAN, RETURN_LOAN } from "@/lib/operations";
 import { statusLabel } from "@/lib/localization";
 import { errorMessage, queryGraphQL, type AssetItem, type LoanItem } from "@/lib/workspace";
@@ -49,6 +49,7 @@ export function LoansPage() {
   const [returning, setReturning] = useState<LoanItem | null>(null);
   const [returnConfirmationOpen, setReturnConfirmationOpen] = useState(false);
   const [condition, setCondition] = useState<"GOOD" | "DAMAGED" | "LOST">("GOOD");
+  const [damageDescription, setDamageDescription] = useState("");
   const [saving, setSaving] = useState(false);
   const [loanPage, setLoanPage] = useState(0);
   const [loanPageSize, setLoanPageSize] = useState(10);
@@ -56,6 +57,9 @@ export function LoansPage() {
   const [catalogPageSize, setCatalogPageSize] = useState(10);
   const [catalogSearch, setCatalogSearch] = useState("");
   const [availabilityFilter, setAvailabilityFilter] = useState<"ALL" | "AVAILABLE" | "UNAVAILABLE">("ALL");
+  const [loanSearch, setLoanSearch] = useState("");
+  const [loanStatusFilter, setLoanStatusFilter] = useState("ALL");
+  const [loanSortBy, setLoanSortBy] = useState(inspector ? "PENDING_FIRST" : "REQUEST_DATE_DESC");
   const [loansExpanded, setLoansExpanded] = useState(!technician);
   const [selectedRejection, setSelectedRejection] = useState<LoanItem | null>(null);
 
@@ -100,11 +104,43 @@ export function LoansPage() {
   }, [role, technician, session?.token, refresh]);
 
   const overdue = loans.some((loan) => loan.status === "APPROVED" && (loan.delayDays ?? 0) > 0);
-  const rows = useMemo(
-    () => [...loans].sort((first, second) => Number(second.status === "PENDING") - Number(first.status === "PENDING")),
-    [loans],
-  );
-  const pendingLoans = rows.filter((loan) => loan.status === "PENDING").length;
+  const pendingLoans = loans.filter((loan) => loan.status === "PENDING").length;
+  const filteredLoans = useMemo(() => {
+    return loans.filter((loan) => {
+      const searchTarget = `${loan.asset.serialNumber} ${loan.asset.model ?? ""} ${loan.user?.fullName ?? ""} ${loan.user?.email ?? ""}`.toLowerCase();
+      const matchesText = searchTarget.includes(loanSearch.trim().toLowerCase());
+      const matchesStatus = loanStatusFilter === "ALL" || loan.status === loanStatusFilter;
+      return matchesText && matchesStatus;
+    });
+  }, [loans, loanSearch, loanStatusFilter]);
+
+  const rows = useMemo(() => {
+    return [...filteredLoans].sort((a, b) => {
+      switch (loanSortBy) {
+        case "PENDING_FIRST": {
+          const aPending = a.status === "PENDING" ? 1 : 0;
+          const bPending = b.status === "PENDING" ? 1 : 0;
+          if (aPending !== bPending) return bPending - aPending;
+          return (b.requestDate ?? "").localeCompare(a.requestDate ?? "");
+        }
+        case "REQUEST_DATE_DESC":
+          return (b.requestDate ?? "").localeCompare(a.requestDate ?? "");
+        case "REQUEST_DATE_ASC":
+          return (a.requestDate ?? "").localeCompare(b.requestDate ?? "");
+        case "DUE_DATE_ASC":
+          return (a.dueLocalDate ?? "").localeCompare(b.dueLocalDate ?? "");
+        case "DUE_DATE_DESC":
+          return (b.dueLocalDate ?? "").localeCompare(a.dueLocalDate ?? "");
+        case "DELAY_DAYS_DESC":
+          return (b.delayDays ?? 0) - (a.delayDays ?? 0);
+        case "ASSET_ASC":
+          return (a.asset.model || a.asset.serialNumber).localeCompare(b.asset.model || b.asset.serialNumber);
+        default:
+          return 0;
+      }
+    });
+  }, [filteredLoans, loanSortBy]);
+
   const isAdmin = role === "ADMIN";
   const availableAssets = catalogAssets.filter((asset) => asset.status === "AVAILABLE");
   const filteredCatalogAssets = useMemo(() => catalogAssets.filter((asset) => {
@@ -136,8 +172,12 @@ export function LoansPage() {
       setFeedback({ error: "La fecha prevista de devolución no puede ser anterior a hoy." });
       return;
     }
-    if (loanDate !== today) {
-      setFeedback({ error: "La fecha de inicio del préstamo debe ser hoy." });
+    if (loanDate < getLocalTodayIso()) {
+      setFeedback({ error: "La fecha de inicio del préstamo no puede ser anterior a hoy." });
+      return;
+    }
+    if (dueDate < loanDate) {
+      setFeedback({ error: "La fecha de devolución no puede ser anterior a la fecha de inicio." });
       return;
     }
     if (!isOperationalTime(loanTime) || !isOperationalTime(dueTime)) {
@@ -158,7 +198,15 @@ export function LoansPage() {
   async function confirmRequest() {
     setSaving(true); setFeedback({});
     try {
-      await queryGraphQL<MutationResult>(REQUEST_LOAN, { input: { assetId, dueDate } });
+      await queryGraphQL<MutationResult>(REQUEST_LOAN, {
+        input: {
+          assetId,
+          dueDate,
+          startDate: loanDate,
+          startTime: loanTime,
+          endTime: dueTime,
+        },
+      });
       setRequestConfirmationOpen(false); setAssetId(""); setLoanDate(today); setLoanTime("08:00"); setDueDate(""); setDueTime("09:00"); setLoanPage(0); setFeedback({ success: "Solicitud enviada para revisión." }); setRefresh((value) => value + 1);
     } catch (error) {
       setRequestConfirmationOpen(false);
@@ -190,13 +238,30 @@ export function LoansPage() {
 
   async function returnLoan(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); if (!returning) return;
+    if (condition === "DAMAGED" && damageDescription.trim().length < 10) {
+      setFeedback({ error: "La descripción de la falla debe tener al menos 10 caracteres." });
+      return;
+    }
     setReturnConfirmationOpen(true);
   }
 
   async function confirmReturn() {
     if (!returning) return;
     setSaving(true); setFeedback({});
-    try { await queryGraphQL<MutationResult>(RETURN_LOAN, { input: { loanId: returning.id, condition } }); setReturning(null); setLoanPage(0); setFeedback({ success: `Devolución registrada: ${statusLabel(condition).toLowerCase()}.` }); setRefresh((value) => value + 1); }
+    try {
+      await queryGraphQL<MutationResult>(RETURN_LOAN, {
+        input: {
+          loanId: returning.id,
+          condition,
+          damageDescription: condition === "DAMAGED" ? damageDescription.trim() : null,
+        },
+      });
+      setReturning(null);
+      setDamageDescription("");
+      setLoanPage(0);
+      setFeedback({ success: `Devolución registrada: ${statusLabel(condition).toLowerCase()}.` });
+      setRefresh((value) => value + 1);
+    }
     catch (error) { setFeedback({ error: errorMessage(error) }); }
     finally { setReturnConfirmationOpen(false); setSaving(false); }
   }
@@ -228,9 +293,28 @@ export function LoansPage() {
       <section className="work-section">
         <div className="section-toolbar loan-history-toolbar">
           <div className="toolbar-title"><ClipboardList size={17} /><strong>{inspector ? "Bandeja de préstamos" : technician ? "Historial de préstamos" : "Todos los préstamos"}</strong><span>{rows.length}</span>{inspector && <span className="pending-count">{pendingLoans} pendientes</span>}</div>
-          <button type="button" className="loans-collapse-trigger" aria-expanded={loansExpanded} aria-controls="loan-history-panel" onClick={() => setLoansExpanded((expanded) => !expanded)}>
-            <span>{loansExpanded ? "Contraer" : "Expandir"}</span><ChevronDown size={16} aria-hidden="true" />
-          </button>
+          <div className="toolbar-controls">
+            <label className="search-control"><Search size={16} /><input value={loanSearch} onChange={(event) => { setLoanSearch(event.target.value); setLoanPage(0); }} placeholder="Serie, modelo o técnico" aria-label="Buscar préstamos por serie, modelo o técnico" /></label>
+            <SelectInput className="filter-select" value={loanStatusFilter} onChange={(event) => { setLoanStatusFilter(event.target.value); setLoanPage(0); }} aria-label="Filtrar por estado del préstamo">
+              <option value="ALL">Todos los estados</option>
+              <option value="PENDING">Pendiente</option>
+              <option value="APPROVED">Aprobado</option>
+              <option value="REJECTED">Rechazado</option>
+              <option value="RETURNED">Devuelto</option>
+            </SelectInput>
+            <SelectInput className="filter-select" value={loanSortBy} onChange={(event) => { setLoanSortBy(event.target.value); setLoanPage(0); }} aria-label="Ordenar préstamos por">
+              <option value="PENDING_FIRST">Pendientes primero</option>
+              <option value="REQUEST_DATE_DESC">Fecha solicitud (Reciente)</option>
+              <option value="REQUEST_DATE_ASC">Fecha solicitud (Antigua)</option>
+              <option value="DUE_DATE_ASC">Vencimiento (Próximo)</option>
+              <option value="DUE_DATE_DESC">Vencimiento (Lejano)</option>
+              <option value="DELAY_DAYS_DESC">Días de mora (Mayor)</option>
+              <option value="ASSET_ASC">Activo (A-Z)</option>
+            </SelectInput>
+            <button type="button" className="loans-collapse-trigger" aria-expanded={loansExpanded} aria-controls="loan-history-panel" onClick={() => setLoansExpanded((expanded) => !expanded)}>
+              <span>{loansExpanded ? "Contraer" : "Expandir"}</span><ChevronDown size={16} aria-hidden="true" />
+            </button>
+          </div>
         </div>
         <div id="loan-history-panel" hidden={!loansExpanded}>
         {loading ? <LoadingRows label="Cargando préstamos" /> : rows.length === 0 ? <EmptyState title="Sin préstamos registrados" detail={technician ? "Actualmente no tienes solicitudes de préstamo pendientes ni activas." : "Actualmente no hay solicitudes de préstamo pendientes ni activas."} /> : <DataTable headings={technician ? ["Activo", "Solicitud", "Vencimiento", "Devolución", "Días de mora", "Estado", "Acción"] : ["Activo", "Técnico", "Solicitud", "Vencimiento", "Condición", "Estado", "Acciones"]}>
@@ -243,19 +327,44 @@ export function LoansPage() {
             </td>
             {!technician && <td>{loan.user?.fullName || loan.user?.email || "—"}</td>}
             <td>{loan.requestDate?.slice(0, 10) ?? "—"}</td><td>{loan.dueLocalDate ?? "—"}{loan.status === "APPROVED" && (loan.delayDays ?? 0) > 0 && <span className="status-tag bad overdue-badge">Vencido · {loan.delayDays} d</span>}</td>
-            {technician ? <><td>{loan.returnDateTime?.slice(0, 10) ?? "—"}{(loan.delayDays ?? 0) > 0 && <small className="table-secondary overdue-copy">{loan.delayDays} días tarde</small>}</td><td><StatusTag value={loan.status} /></td><td>{loan.status === "APPROVED" ? <button className="table-action" type="button" title="Registrar devolución" aria-label="Registrar devolución" onClick={() => { setCondition("GOOD"); setReturning(loan); }}><RotateCcw size={15} /></button> : loan.status === "REJECTED" ? <button type="button" className="view-reason-button" onClick={() => setSelectedRejection(loan)}>Ver motivo</button> : <span className="actions-placeholder">—</span>}</td></> : <><td>{loan.returnCondition ? <StatusTag value={loan.returnCondition} /> : "—"}</td><td><StatusTag value={loan.status} /></td><td><div className="inline-actions">{inspector && loan.status === "PENDING" && <><button className="table-action approve-action" type="button" title="Aprobar solicitud" aria-label="Aprobar solicitud" disabled={saving} onClick={() => approve(loan)}><Check size={16} /></button><button className="table-action reject-action" type="button" title="Rechazar solicitud" aria-label="Rechazar solicitud" disabled={saving} onClick={() => { setRejecting(loan); setReason(""); }}><X size={16} /></button></>}{(isAdmin || inspector) && loan.status === "APPROVED" && <button className="table-action" type="button" title="Registrar devolución" aria-label="Registrar devolución" onClick={() => { setCondition("GOOD"); setReturning(loan); }}><RotateCcw size={15} /></button>}{!(inspector && loan.status === "PENDING") && !((isAdmin || inspector) && loan.status === "APPROVED") && <span className="actions-placeholder">—</span>}</div></td></>}
+            {technician ? <><td>{loan.returnDateTime?.slice(0, 10) ?? "—"}{(loan.delayDays ?? 0) > 0 && <small className="table-secondary overdue-copy">{loan.delayDays} días tarde</small>}</td><td><StatusTag value={loan.status} /></td><td>{loan.status === "APPROVED" ? <button className="table-action" type="button" title="Registrar devolución" aria-label="Registrar devolución" onClick={() => { setCondition("GOOD"); setDamageDescription(""); setReturning(loan); }}><RotateCcw size={15} /></button> : loan.status === "REJECTED" ? <button type="button" className="view-reason-button" onClick={() => setSelectedRejection(loan)}>Ver motivo</button> : <span className="actions-placeholder">—</span>}</td></> : <><td>{loan.returnCondition ? <StatusTag value={loan.returnCondition} /> : "—"}</td><td><StatusTag value={loan.status} /></td><td><div className="inline-actions">{inspector && loan.status === "PENDING" && <><button className="table-action approve-action" type="button" title="Aprobar solicitud" aria-label="Aprobar solicitud" disabled={saving} onClick={() => approve(loan)}><Check size={16} /></button><button className="table-action reject-action" type="button" title="Rechazar solicitud" aria-label="Rechazar solicitud" disabled={saving} onClick={() => { setRejecting(loan); setReason(""); }}><X size={16} /></button></>}{(isAdmin || inspector) && loan.status === "APPROVED" && <button className="table-action" type="button" title="Registrar devolución" aria-label="Registrar devolución" onClick={() => { setCondition("GOOD"); setDamageDescription(""); setReturning(loan); }}><RotateCcw size={15} /></button>}{!(inspector && loan.status === "PENDING") && !((isAdmin || inspector) && loan.status === "APPROVED") && <span className="actions-placeholder">—</span>}</div></td></>}
           </tr>)}
         </DataTable>}
         <PaginationControls currentPage={loanPage} totalItems={rows.length} pageSize={loanPageSize} onPageChange={setLoanPage} onPageSizeChange={(size) => { setLoanPageSize(size); setLoanPage(0); }} loading={loading} itemLabel="préstamos" />
         </div>
       </section>
-      {showRequest && !requestConfirmationOpen && <motion.div className="modal-backdrop asset-drawer-backdrop" role="presentation" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.18 }} onMouseDown={(event) => { if (event.target === event.currentTarget) setShowRequest(false); }}><motion.section ref={requestDialogRef} tabIndex={-1} className="work-modal asset-drawer" role="dialog" aria-modal="true" aria-labelledby="loan-request-title" initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.22, ease: "easeOut" }}><div className="modal-heading"><div><p className="work-eyebrow">CATÁLOGO · NUEVA CUSTODIA</p><h2 id="loan-request-title">{selectedAsset?.model || "Solicitar préstamo"}</h2></div><button className="table-action" type="button" aria-label="Cerrar" onClick={() => setShowRequest(false)}><X size={17} /></button></div>
-        {selectedAsset && <div className="drawer-asset-summary"><span className="drawer-asset-photo"><Laptop size={44} strokeWidth={1.2} /></span><span className={`asset-availability ${selectedAsset.status === "AVAILABLE" ? "available" : "unavailable"}`}><i />{selectedAsset.status === "AVAILABLE" ? "Disponible" : "No disponible"}</span><strong className="telemetry-value">{selectedAsset.serialNumber}</strong><span>{selectedAsset.model || "Activo"}</span></div>}
-        {technician && (!selectedAsset || selectedAsset.status === "AVAILABLE") ? <form className="work-form" onSubmit={submitRequest}><div className="work-field"><span>Activo disponible</span><div className="asset-combobox-row"><Combobox value={assetId} onValueChange={setAssetId} options={assetOptions} placeholder="Selecciona un equipo" searchPlaceholder="Buscar por serie o modelo" emptyMessage="No hay equipos disponibles." required />{selectedAsset && <CopyButton text={selectedAsset.serialNumber} label={`Copiar serie ${selectedAsset.serialNumber}`} />}</div></div><div className="form-grid two-col"><FormField label="Fecha de inicio"><TextInput type="date" value={loanDate} onChange={(event) => setLoanDate(event.target.value)} min={today} max={today} required /></FormField><FormField label="Hora de inicio"><TextInput type="time" min="08:00" max="18:00" value={loanTime} onChange={(event) => setLoanTime(event.target.value)} required /></FormField><FormField label="Fecha prevista de devolución"><TextInput type="date" min={loanDate || today} value={dueDate} onChange={(event) => setDueDate(event.target.value)} required /></FormField><FormField label="Hora prevista de devolución"><TextInput type="time" min="08:00" max="18:00" value={dueTime} onChange={(event) => setDueTime(event.target.value)} required /></FormField></div><p className="form-hint">Horario operativo: 08:00–18:00. El préstamo debe durar al menos una hora. La solicitud quedará pendiente hasta la aprobación de un inspector.</p><div className="modal-actions"><Button variant="secondary" type="button" onClick={() => setShowRequest(false)}>Cancelar</Button><Button type="submit" loading={saving} disabled={overdue}>Enviar solicitud</Button></div></form> : <div className="drawer-unavailable"><p>{technician ? "Este activo no está disponible para una nueva solicitud." : "Consulta el estado de este activo en el catálogo."}</p><Button variant="secondary" type="button" onClick={() => setShowRequest(false)}>Cerrar detalle</Button></div>}
-      </motion.section></motion.div>}
-      {rejecting && <div className="modal-backdrop" role="presentation"><section ref={rejectDialogRef} tabIndex={-1} className="work-modal" role="dialog" aria-modal="true" aria-labelledby="reject-title"><div className="modal-heading"><div><p className="work-eyebrow">REVISIÓN</p><h2 id="reject-title">Rechazar solicitud</h2></div><button className="table-action" type="button" aria-label="Cerrar" onClick={() => setRejecting(null)}><X size={17} /></button></div><form className="work-form" onSubmit={reject}><p className="form-hint copy-value">Activo <span className="telemetry-value">{rejecting.asset.serialNumber}</span><CopyButton text={rejecting.asset.serialNumber} label={`Copiar serie ${rejecting.asset.serialNumber}`} /> · {rejecting.user?.fullName || rejecting.user?.email}</p><FormField label="Motivo del rechazo"><textarea className="work-input work-textarea" value={reason} onChange={(event) => setReason(event.target.value)} minLength={15} maxLength={255} required /><small className={`character-counter ${reason.trim().length >= 15 ? "met" : ""}`}>{reason.length} / 255 caracteres · Mínimo 15</small></FormField><div className="modal-actions"><Button variant="secondary" type="button" onClick={() => setRejecting(null)}>Cancelar</Button><Button variant="danger" type="submit" loading={saving}>Confirmar rechazo</Button></div></form></section></div>}
+      {showRequest && !requestConfirmationOpen && (
+        <ModalPortal>
+          <motion.div className="modal-backdrop asset-drawer-backdrop" role="presentation" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.18 }} onMouseDown={(event) => { if (event.target === event.currentTarget) setShowRequest(false); }}>
+            <motion.section ref={requestDialogRef} tabIndex={-1} className="work-modal asset-drawer" role="dialog" aria-modal="true" aria-labelledby="loan-request-title" initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.22, ease: "easeOut" }}>
+              <div className="modal-heading"><div><p className="work-eyebrow">CATÁLOGO · NUEVA CUSTODIA</p><h2 id="loan-request-title">{selectedAsset?.model || "Solicitar préstamo"}</h2></div><button className="table-action" type="button" aria-label="Cerrar" onClick={() => setShowRequest(false)}><X size={17} /></button></div>
+              {selectedAsset && <div className="drawer-asset-summary"><span className="drawer-asset-photo"><Laptop size={44} strokeWidth={1.2} /></span><span className={`asset-availability ${selectedAsset.status === "AVAILABLE" ? "available" : "unavailable"}`}><i />{selectedAsset.status === "AVAILABLE" ? "Disponible" : "No disponible"}</span><strong className="telemetry-value">{selectedAsset.serialNumber}</strong><span>{selectedAsset.model || "Activo"}</span></div>}
+              {technician && (!selectedAsset || selectedAsset.status === "AVAILABLE") ? <form className="work-form" onSubmit={submitRequest}><div className="work-field"><span>Activo disponible</span><div className="asset-combobox-row"><Combobox value={assetId} onValueChange={setAssetId} options={assetOptions} placeholder="Selecciona un equipo" searchPlaceholder="Buscar por serie o modelo" emptyMessage="No hay equipos disponibles." required />{selectedAsset && <CopyButton text={selectedAsset.serialNumber} label={`Copiar serie ${selectedAsset.serialNumber}`} />}</div></div><div className="form-grid two-col"><FormField label="Fecha de inicio"><TextInput type="date" value={loanDate} onChange={(event) => setLoanDate(event.target.value)} min={today} required /></FormField><FormField label="Hora de inicio"><TextInput type="time" min="08:00" max="18:00" value={loanTime} onChange={(event) => setLoanTime(event.target.value)} required /></FormField><FormField label="Fecha prevista de devolución"><TextInput type="date" min={loanDate || today} value={dueDate} onChange={(event) => setDueDate(event.target.value)} required /></FormField><FormField label="Hora prevista de devolución"><TextInput type="time" min="08:00" max="18:00" value={dueTime} onChange={(event) => setDueTime(event.target.value)} required /></FormField></div><p className="form-hint">Horario operativo: 08:00–18:00. El préstamo debe durar al menos una hora. La solicitud quedará pendiente hasta la aprobación de un inspector.</p><div className="modal-actions"><Button variant="secondary" type="button" onClick={() => setShowRequest(false)}>Cancelar</Button><Button type="submit" loading={saving} disabled={overdue}>Enviar solicitud</Button></div></form> : <div className="drawer-unavailable"><p>{technician ? "Este activo no está disponible para una nueva solicitud." : "Consulta el estado de este activo en el catálogo."}</p><Button variant="secondary" type="button" onClick={() => setShowRequest(false)}>Cerrar detalle</Button></div>}
+            </motion.section>
+          </motion.div>
+        </ModalPortal>
+      )}
+      {rejecting && (
+        <ModalPortal>
+          <div className="modal-backdrop" role="presentation">
+            <section ref={rejectDialogRef} tabIndex={-1} className="work-modal" role="dialog" aria-modal="true" aria-labelledby="reject-title">
+              <div className="modal-heading"><div><p className="work-eyebrow">REVISIÓN</p><h2 id="reject-title">Rechazar solicitud</h2></div><button className="table-action" type="button" aria-label="Cerrar" onClick={() => setRejecting(null)}><X size={17} /></button></div>
+              <form className="work-form" onSubmit={reject}><p className="form-hint copy-value">Activo <span className="telemetry-value">{rejecting.asset.serialNumber}</span><CopyButton text={rejecting.asset.serialNumber} label={`Copiar serie ${rejecting.asset.serialNumber}`} /> · {rejecting.user?.fullName || rejecting.user?.email}</p><FormField label="Motivo del rechazo"><textarea className="work-input work-textarea" value={reason} onChange={(event) => setReason(event.target.value)} minLength={15} maxLength={255} required /><small className={`character-counter ${reason.trim().length >= 15 ? "met" : ""}`}>{reason.length} / 255 caracteres · Mínimo 15</small></FormField><div className="modal-actions"><Button variant="secondary" type="button" onClick={() => setRejecting(null)}>Cancelar</Button><Button variant="danger" type="submit" loading={saving}>Confirmar rechazo</Button></div></form>
+            </section>
+          </div>
+        </ModalPortal>
+      )}
       {selectedRejection && <Dialog open title="Motivo del rechazo" eyebrow={`SOLICITUD · ${selectedRejection.asset.serialNumber}`} onClose={() => setSelectedRejection(null)}><p className="legal-notice-copy">{selectedRejection.rejectionReason?.trim() || "El inspector no registró una justificación para esta solicitud."}</p></Dialog>}
-      {returning && !returnConfirmationOpen && <div className="modal-backdrop" role="presentation"><section ref={returnDialogRef} tabIndex={-1} className="work-modal" role="dialog" aria-modal="true" aria-labelledby="return-title"><div className="modal-heading"><div><p className="work-eyebrow">DEVOLUCIÓN FÍSICA</p><h2 id="return-title">{technician ? "Devolver activo" : "Registrar devolución"}</h2></div><button className="table-action" type="button" aria-label="Cerrar" onClick={() => setReturning(null)}><X size={17} /></button></div><form className="work-form" onSubmit={returnLoan}><p className="form-hint copy-value">Activo <span className="telemetry-value">{returning.asset.serialNumber}</span><CopyButton text={returning.asset.serialNumber} label={`Copiar serie ${returning.asset.serialNumber}`} /> · vencía el <span className="telemetry-value">{returning.dueLocalDate ?? "sin fecha"}</span></p><FormField label="Condición al devolver"><SelectInput value={condition} onChange={(event) => setCondition(event.target.value as typeof condition)}><option value="GOOD">En buen estado</option><option value="DAMAGED">Dañado</option><option value="LOST">No localizado</option></SelectInput></FormField><p className="form-hint">{condition === "DAMAGED" ? "Confirmas que el equipo está dañado y pasará a mantenimiento." : condition === "LOST" ? "Confirmas que el equipo no está localizado y se registrará como merma." : "El equipo quedará disponible al registrar su devolución."}</p><div className="modal-actions"><Button variant="secondary" type="button" onClick={() => setReturning(null)}>Cancelar</Button><Button type="submit" loading={saving}>{condition === "DAMAGED" ? "Confirmar devolución con daño" : condition === "LOST" ? "Confirmar activo no localizado" : "Registrar devolución"}</Button></div></form></section></div>}
+      {returning && !returnConfirmationOpen && (
+        <ModalPortal>
+          <div className="modal-backdrop" role="presentation">
+            <section ref={returnDialogRef} tabIndex={-1} className="work-modal" role="dialog" aria-modal="true" aria-labelledby="return-title">
+              <div className="modal-heading"><div><p className="work-eyebrow">DEVOLUCIÓN FÍSICA</p><h2 id="return-title">{technician ? "Devolver activo" : "Registrar devolución"}</h2></div><button className="table-action" type="button" aria-label="Cerrar" onClick={() => setReturning(null)}><X size={17} /></button></div>
+              <form className="work-form" onSubmit={returnLoan}><p className="form-hint copy-value">Activo <span className="telemetry-value">{returning.asset.serialNumber}</span><CopyButton text={returning.asset.serialNumber} label={`Copiar serie ${returning.asset.serialNumber}`} /> · vencía el <span className="telemetry-value">{returning.dueLocalDate ?? "sin fecha"}</span></p><FormField label="Condición al devolver"><SelectInput value={condition} onChange={(event) => setCondition(event.target.value as typeof condition)}><option value="GOOD">En buen estado</option><option value="DAMAGED">Dañado</option><option value="LOST">No localizado</option></SelectInput></FormField>{condition === "DAMAGED" && <FormField label="Descripción de la falla (obligatorio)"><textarea className="work-input work-textarea" value={damageDescription} onChange={(event) => setDamageDescription(event.target.value)} placeholder="Describe detalladamente el daño físico o avería del activo..." rows={3} minLength={10} required /><small className={`character-counter ${damageDescription.trim().length >= 10 ? "met" : ""}`}>{damageDescription.length} caracteres · Mínimo 10</small></FormField>}<p className="form-hint">{condition === "DAMAGED" ? "Confirmas que el equipo está dañado, pasará a mantenimiento y se abrirá una orden técnica pendiente." : condition === "LOST" ? "Confirmas que el equipo no está localizado y se generará el reporte formal de pérdida." : "El equipo quedará disponible al registrar su devolución."}</p><div className="modal-actions"><Button variant="secondary" type="button" onClick={() => setReturning(null)}>Cancelar</Button><Button type="submit" loading={saving}>{condition === "DAMAGED" ? "Confirmar devolución con daño" : condition === "LOST" ? "Confirmar activo no localizado" : "Registrar devolución"}</Button></div></form>
+            </section>
+          </div>
+        </ModalPortal>
+      )}
       <ConfirmDialog
         open={requestConfirmationOpen}
         title="Confirmar solicitud de préstamo"

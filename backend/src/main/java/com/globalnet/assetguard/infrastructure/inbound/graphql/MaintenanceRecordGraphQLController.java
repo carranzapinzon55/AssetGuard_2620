@@ -3,6 +3,7 @@ package com.globalnet.assetguard.infrastructure.inbound.graphql;
 import com.globalnet.assetguard.application.usecase.MaintenanceRecordUseCase;
 import com.globalnet.assetguard.domain.model.Asset;
 import com.globalnet.assetguard.domain.model.MaintenanceRecord;
+import com.globalnet.assetguard.domain.model.Provider;
 import java.time.LocalDate;
 import org.springframework.graphql.data.method.annotation.Argument;
 import org.springframework.graphql.data.method.annotation.MutationMapping;
@@ -33,9 +34,16 @@ public class MaintenanceRecordGraphQLController {
     @PreAuthorize("hasAnyRole('ADMIN', 'INSPECTOR')")
     public GraphQLViews.MaintenanceRecordView createMaintenanceRecord(
             @Argument("input") MaintenanceRecordInput input) {
+        Provider provider = null;
+        if (input.providerId() != null) {
+            provider = Provider.builder().id(input.providerId()).build();
+        } else if (input.providerName() != null && !input.providerName().isBlank()) {
+            provider = Provider.builder().name(input.providerName().trim()).build();
+        }
+
         MaintenanceRecord record = MaintenanceRecord.builder()
                 .asset(Asset.builder().id(input.assetId()).build())
-                .providerName(input.providerName())
+                .provider(provider)
                 .reason(input.reason())
                 .cost(input.cost())
                 .startDate(input.startDate() == null ? null : LocalDate.parse(input.startDate()))
@@ -54,8 +62,15 @@ public class MaintenanceRecordGraphQLController {
     @PreAuthorize("hasAnyRole('ADMIN', 'INSPECTOR')")
     public GraphQLViews.MaintenanceRecordView updateMaintenanceRecord(
             @Argument("input") UpdateMaintenanceRecordInput input) {
+        Provider provider = null;
+        if (input.providerId() != null) {
+            provider = Provider.builder().id(input.providerId()).build();
+        } else if (input.providerName() != null && !input.providerName().isBlank()) {
+            provider = Provider.builder().name(input.providerName().trim()).build();
+        }
+
         MaintenanceRecord changes = MaintenanceRecord.builder()
-                .providerName(input.providerName())
+                .provider(provider)
                 .reason(input.reason())
                 .cost(input.cost())
                 .build();
@@ -67,11 +82,12 @@ public class MaintenanceRecordGraphQLController {
     }
 
     public record UpdateMaintenanceRecordInput(
-            Long recordId, String providerName, String reason, Double cost) {
+            Long recordId, Long providerId, String providerName, String reason, Double cost) {
     }
 
     public record MaintenanceRecordInput(
             Long assetId,
+            Long providerId,
             String providerName,
             String reason,
             Double cost,

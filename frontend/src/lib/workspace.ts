@@ -34,6 +34,11 @@ export async function queryGraphQL<T>(document: string, variables?: Record<strin
 
 export function errorMessage(error: unknown): string {
   if (error instanceof GraphQLAuthorizationError) return error.message;
+  if (error instanceof ClientError) {
+    const firstError = error.response.errors?.[0];
+    if (firstError?.message) return firstError.message;
+  }
+  if (error instanceof Error && error.message) return error.message;
   return GENERIC_ERROR_MESSAGE;
 }
 
@@ -67,6 +72,7 @@ export type AssetItem = {
   estimatedValue: number | null;
   status: string;
   purchaseDate: string | null;
+  stockQuantity: number | null;
 };
 
 export type UserItem = {
@@ -99,4 +105,20 @@ export type MaintenanceItem = {
   startDate: string | null;
   endDate: string | null;
   asset: Pick<AssetItem, "id" | "serialNumber" | "model" | "status">;
+};
+
+export type ProviderItem = {
+  id: string;
+  name: string;
+  active: boolean;
+};
+
+export type LostAssetReportItem = {
+  id: string;
+  reportedAt: string;
+  notes: string | null;
+  acknowledged: boolean;
+  asset: Pick<AssetItem, "id" | "serialNumber" | "model" | "status">;
+  loan?: Pick<LoanItem, "id" | "dueLocalDate" | "status"> | null;
+  reportedByUser?: Pick<UserItem, "id" | "fullName" | "email" | "role"> | null;
 };

@@ -72,7 +72,7 @@ class BulkUploadAssetsUseCaseIntegrationTest {
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
                 () -> bulkUploadAssetsUseCase.execute("assets.csv", csv.getBytes(StandardCharsets.UTF_8)));
 
-        assertEquals("Error en la fila 3: estimatedValue debe ser un valor numérico de al menos 10 USD",
+        assertEquals("Error en la fila 3: estimatedValue debe ser un valor numérico de al menos 0.25 USD (equivalente a $1.000 COP)",
                 exception.getMessage());
         assertEquals(0, assetRepositoryPort.findAll().size());
     }

@@ -4,6 +4,7 @@ import { useEffect, useState, type PointerEvent } from "react";
 import { Activity, AlertTriangle, CalendarDays, PackageCheck, RotateCcw, Wrench } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import { Button, CurrencyDisplay, Dialog, EmptyState, Feedback, FormField, InsightCard, LoadingRows, PageTitle, TextInput } from "@/components/workspace/ui";
+import { LostReportsBanner, LostReportsBell } from "@/components/workspace/lost-reports-dialog";
 import { DASHBOARD_QUERY } from "@/lib/operations";
 import { errorMessage, queryGraphQL } from "@/lib/workspace";
 
@@ -35,6 +36,7 @@ export function DashboardPage() {
 
   useEffect(() => {
     let active = true;
+    setLoading(true);
     queryGraphQL<MetricsResult>(DASHBOARD_QUERY, {
       startDate: appliedRange.startDate || null,
       endDate: appliedRange.endDate || null,
@@ -86,9 +88,15 @@ export function DashboardPage() {
 
   return (
     <div className="work-page">
-      <PageTitle eyebrow="GLOBALNET · RESUMEN EJECUTIVO" title="Panel de control de activos" description="Salud financiera y operativa de la flota de activos." />
+      <PageTitle
+        eyebrow="GLOBALNET · RESUMEN EJECUTIVO"
+        title="Panel de control de activos"
+        description="Salud financiera y operativa de la flota de activos."
+        action={<LostReportsBell />}
+      />
       <Feedback error={error} />
-      <section className="work-section dashboard-filters"><div className="filter-heading"><CalendarDays size={16} /><strong>Periodo de devoluciones</strong><span>Las existencias en campo muestran el estado actual.</span></div><div className="date-filter-controls"><FormField label="Desde"><TextInput type="date" max={today} value={startDate} onChange={(event) => setStartDate(event.target.value)} /></FormField><FormField label="Hasta"><TextInput type="date" min={today} value={endDate} onChange={(event) => setEndDate(event.target.value)} /></FormField><Button onClick={() => setAppliedRange({ startDate, endDate })}><Activity size={15} /> Aplicar periodo</Button><Button variant="quiet" onClick={() => { setStartDate(""); setEndDate(""); setAppliedRange({ startDate: "", endDate: "" }); setRefresh((value) => value + 1); }}><RotateCcw size={15} /> Limpiar</Button></div></section>
+      <LostReportsBanner />
+      <section className="work-section dashboard-filters"><div className="filter-heading"><CalendarDays size={16} /><strong>Periodo de devoluciones</strong><span>Las existencias en campo muestran el estado actual.</span></div><div className="date-filter-controls"><FormField label="Desde"><TextInput type="date" max={endDate || undefined} value={startDate} onChange={(event) => setStartDate(event.target.value)} /></FormField><FormField label="Hasta"><TextInput type="date" min={startDate || undefined} value={endDate} onChange={(event) => setEndDate(event.target.value)} /></FormField><Button onClick={() => { if (startDate && endDate && startDate > endDate) { setError("La fecha de inicio debe ser anterior o igual a la fecha final."); return; } setError(""); setAppliedRange({ startDate, endDate }); }}><Activity size={15} /> Aplicar periodo</Button><Button variant="quiet" onClick={() => { setStartDate(""); setEndDate(""); setError(""); setAppliedRange({ startDate: "", endDate: "" }); setRefresh((value) => value + 1); }}><RotateCcw size={15} /> Limpiar</Button></div></section>
       {loading ? <LoadingRows label="Calculando métricas" /> : !metrics ? <EmptyState title="No hay métricas disponibles" detail="No se encontraron datos para el periodo seleccionado." /> : <>
         <section className="metric-grid">
           <button type="button" className="metric-panel loss" aria-label="Ver detalle de mermas por pérdida o daño" aria-haspopup="dialog" onClick={() => setSelectedMetric("loss")} onPointerMove={updateMetricSpotlight}><div className="metric-panel-top"><span className="metric-icon"><AlertTriangle size={17} /></span><span className="work-eyebrow">MERMAS · PERIODO</span></div><strong className="metric-value telemetry-value"><CurrencyDisplay usdAmount={metrics.estimatedLossValue} /></strong><p>Valor estimado de activos perdidos o dañados.</p><div className="metric-signal" aria-hidden="true"><i /><i /><i /><i /><i /><i /><i /><i /></div><div className="metric-foot"><span>PÉRDIDA + DAÑO</span><span>VER DESGLOSE <span aria-hidden="true">↗</span></span></div></button>

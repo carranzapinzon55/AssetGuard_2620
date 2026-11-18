@@ -2,27 +2,45 @@ package com.globalnet.assetguard.infrastructure.inbound.graphql;
 
 import com.globalnet.assetguard.application.usecase.AssetUseCase;
 import com.globalnet.assetguard.application.usecase.BulkUploadAssetsUseCase;
+import com.globalnet.assetguard.application.usecase.LoanUseCase;
+import com.globalnet.assetguard.application.usecase.LostAssetReportUseCase;
 import com.globalnet.assetguard.domain.model.Asset;
+import com.globalnet.assetguard.domain.model.MaintenanceRecord;
+import com.globalnet.assetguard.domain.model.Provider;
+import com.globalnet.assetguard.domain.ports.output.MaintenanceRecordRepositoryPort;
+import com.globalnet.assetguard.infrastructure.security.CurrentAuthenticatedUser;
 import java.time.LocalDate;
+import java.util.Base64;
 import java.util.List;
 import org.springframework.graphql.data.method.annotation.Argument;
 import org.springframework.graphql.data.method.annotation.MutationMapping;
 import org.springframework.graphql.data.method.annotation.QueryMapping;
-import org.springframework.stereotype.Controller;
 import org.springframework.security.access.prepost.PreAuthorize;
-import java.util.Base64;
+import org.springframework.stereotype.Controller;
 
 @Controller
 public class AssetGraphQLController {
 
     private final AssetUseCase assetUseCase;
     private final BulkUploadAssetsUseCase bulkUploadAssetsUseCase;
+    private final LoanUseCase loanUseCase;
+    private final MaintenanceRecordRepositoryPort maintenanceRecordRepositoryPort;
+    private final LostAssetReportUseCase lostAssetReportUseCase;
+    private final CurrentAuthenticatedUser currentAuthenticatedUser;
 
     public AssetGraphQLController(
             AssetUseCase assetUseCase,
-            BulkUploadAssetsUseCase bulkUploadAssetsUseCase) {
+            BulkUploadAssetsUseCase bulkUploadAssetsUseCase,
+            LoanUseCase loanUseCase,
+            MaintenanceRecordRepositoryPort maintenanceRecordRepositoryPort,
+            LostAssetReportUseCase lostAssetReportUseCase,
+            CurrentAuthenticatedUser currentAuthenticatedUser) {
         this.assetUseCase = assetUseCase;
         this.bulkUploadAssetsUseCase = bulkUploadAssetsUseCase;
+        this.loanUseCase = loanUseCase;
+        this.maintenanceRecordRepositoryPort = maintenanceRecordRepositoryPort;
+        this.lostAssetReportUseCase = lostAssetReportUseCase;
+        this.currentAuthenticatedUser = currentAuthenticatedUser;
     }
 
     @QueryMapping
@@ -30,6 +48,7 @@ public class AssetGraphQLController {
     public List<GraphQLViews.AssetView> assets(@Argument Integer limit) {
         int normalizedLimit = normalizeLimit(limit);
         return assetUseCase.findAll().stream()
+                .sorted(java.util.Comparator.comparingLong(Asset::getId).reversed())
                 .limit(normalizedLimit)
                 .map(GraphQLViews.AssetView::from)
                 .toList();
@@ -46,7 +65,20 @@ public class AssetGraphQLController {
                 .purchaseDate(input.purchaseDate() == null ? null : LocalDate.parse(input.purchaseDate()))
                 .stockQuantity(input.stockQuantity())
                 .build();
-        return GraphQLViews.AssetView.from(assetUseCase.register(asset));
+        Asset savedAsset = assetUseCase.register(asset);
+        handleLifecycleSideEffects(
+                savedAsset,
+                input.status(),
+                input.loanTechnicianId(),
+                input.loanStartDate(),
+                input.loanDueDate(),
+                input.loanStartTime(),
+                input.loanEndTime(),
+                input.maintenanceReason(),
+                input.maintenanceCost(),
+                input.maintenanceProviderName(),
+                input.lostNotes());
+        return GraphQLViews.AssetView.from(savedAsset);
     }
 
     @MutationMapping
@@ -60,7 +92,62 @@ public class AssetGraphQLController {
                 .purchaseDate(input.purchaseDate() == null ? null : LocalDate.parse(input.purchaseDate()))
                 .stockQuantity(input.stockQuantity())
                 .build();
-        return GraphQLViews.AssetView.from(assetUseCase.update(input.id(), changes));
+        Asset updatedAsset = assetUseCase.update(input.id(), changes);
+        handleLifecycleSideEffects(
+                updatedAsset,
+                input.status(),
+                input.loanTechnicianId(),
+                input.loanStartDate(),
+                input.loanDueDate(),
+                input.loanStartTime(),
+                input.loanEndTime(),
+                input.maintenanceReason(),
+                input.maintenanceCost(),
+                input.maintenanceProviderName(),
+                input.lostNotes());
+        return GraphQLViews.AssetView.from(updatedAsset);
+    }
+
+    private void handleLifecycleSideEffects(
+            Asset asset,
+            String status,
+            Long technicianId,
+            String startDateStr,
+            String dueDateStr,
+            String startTime,
+            String endTime,
+            String maintenanceReason,
+            Double maintenanceCost,
+            String providerName,
+            String lostNotes) {
+        if ("LOANED".equalsIgnoreCase(status) && technicianId != null && dueDateStr != null) {
+            LocalDate startDate = startDateStr != null && !startDateStr.isBlank()
+                    ? LocalDate.parse(startDateStr)
+                    : LocalDate.now();
+            LocalDate dueDate = LocalDate.parse(dueDateStr);
+            Long adminId = currentAuthenticatedUser.requirePrincipal().userId();
+            loanUseCase.createApprovedLoan(asset.getId(), technicianId, adminId, startDate, dueDate, startTime, endTime);
+        } else if ("UNDER_MAINTENANCE".equalsIgnoreCase(status)) {
+            String reason = (maintenanceReason != null && !maintenanceReason.isBlank())
+                    ? maintenanceReason.trim()
+                    : "Mantenimiento preventivo / correctivo asignado";
+            Provider provider = (providerName != null && !providerName.isBlank())
+                    ? Provider.builder().name(providerName.trim()).build()
+                    : null;
+            maintenanceRecordRepositoryPort.save(MaintenanceRecord.builder()
+                    .asset(asset)
+                    .provider(provider)
+                    .reason(reason)
+                    .cost(maintenanceCost)
+                    .startDate(LocalDate.now())
+                    .build());
+        } else if ("LOST".equalsIgnoreCase(status)) {
+            Long adminId = currentAuthenticatedUser.requirePrincipal().userId();
+            String notes = (lostNotes != null && !lostNotes.isBlank())
+                    ? lostNotes.trim()
+                    : "Activo marcado como perdido desde el módulo de inventario";
+            lostAssetReportUseCase.reportLost(asset.getId(), null, adminId, notes);
+        }
     }
 
     @MutationMapping
@@ -84,7 +171,16 @@ public class AssetGraphQLController {
             Double estimatedValue,
             String status,
             String purchaseDate,
-            Integer stockQuantity) {
+            Integer stockQuantity,
+            Long loanTechnicianId,
+            String loanStartDate,
+            String loanDueDate,
+            String loanStartTime,
+            String loanEndTime,
+            String maintenanceReason,
+            Double maintenanceCost,
+            String maintenanceProviderName,
+            String lostNotes) {
     }
 
     public record BulkUploadInput(String filename, String contentBase64) {
@@ -97,16 +193,25 @@ public class AssetGraphQLController {
             Double estimatedValue,
             String status,
             String purchaseDate,
-            Integer stockQuantity) {
-        }
+            Integer stockQuantity,
+            Long loanTechnicianId,
+            String loanStartDate,
+            String loanDueDate,
+            String loanStartTime,
+            String loanEndTime,
+            String maintenanceReason,
+            Double maintenanceCost,
+            String maintenanceProviderName,
+            String lostNotes) {
+    }
 
     public record BulkUploadPayload(int importedCount, List<GraphQLViews.AssetView> assets) {
     }
 
     private int normalizeLimit(Integer limit) {
-        int value = limit == null ? 10 : limit;
-        if (value != 10 && value != 25 && value != 50) {
-            throw new IllegalArgumentException("limit must be one of 10, 25, or 50");
+        int value = limit == null ? 50 : limit;
+        if (value < 1 || value > 200) {
+            throw new IllegalArgumentException("limit must be between 1 and 200");
         }
         return value;
     }

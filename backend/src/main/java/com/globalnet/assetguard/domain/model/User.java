@@ -19,6 +19,4 @@ public class User {
     private String password;
     private String role;
     private Boolean status;
-    private String passwordResetToken;
-    private LocalDateTime passwordResetTokenExpiresAt;
 }

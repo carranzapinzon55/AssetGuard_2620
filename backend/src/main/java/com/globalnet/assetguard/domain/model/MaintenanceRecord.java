@@ -15,7 +15,7 @@ import lombok.Setter;
 public class MaintenanceRecord {
     private Long id;
     private Asset asset;
-    private String providerName;
+    private Provider provider;
     private String reason;
     private Double cost;
     private LocalDate startDate;

@@ -29,6 +29,9 @@ public class AssetUseCase {
         if (asset == null) {
             throw new IllegalArgumentException("Asset must not be null");
         }
+        if (asset.getStockQuantity() == null) {
+            asset.setStockQuantity(1);
+        }
         validateEstimatedValue(asset.getEstimatedValue());
         validateStockQuantity(asset.getStockQuantity());
 
@@ -109,8 +112,8 @@ public class AssetUseCase {
 
     private void validateEstimatedValue(Double estimatedValue) {
         if (estimatedValue != null
-                && (!Double.isFinite(estimatedValue) || estimatedValue < 10.0)) {
-            throw new IllegalArgumentException("Asset estimatedValue must be at least 10 USD");
+                && (!Double.isFinite(estimatedValue) || estimatedValue < 0.25)) {
+            throw new IllegalArgumentException("Asset estimatedValue must be at least 0.25 USD");
         }
     }
 

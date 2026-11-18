@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { FileSpreadsheet, FileText, Filter, RotateCcw, ShieldCheck } from "lucide-react";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
@@ -45,12 +45,33 @@ export function AuditPage() {
   const [applied, setApplied] = useState(filters);
   const [page, setPage] = useState(0);
   const [limit, setLimit] = useState<(typeof allowedLimits)[number]>(10);
+  const [auditSortBy, setAuditSortBy] = useState("DATE_DESC");
   const [data, setData] = useState<AuditResult["auditLogs"] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const today = getLocalTodayIso();
   const endDateRef = useRef<HTMLInputElement>(null);
   const statusRef = useRef<HTMLSelectElement>(null);
+
+  const sortedLoans = useMemo(() => {
+    if (!data?.loans) return [];
+    return [...data.loans].sort((a, b) => {
+      switch (auditSortBy) {
+        case "DATE_DESC":
+          return (b.requestDate ?? "").localeCompare(a.requestDate ?? "");
+        case "DATE_ASC":
+          return (a.requestDate ?? "").localeCompare(b.requestDate ?? "");
+        case "DELAY_DESC":
+          return (b.delayDays ?? 0) - (a.delayDays ?? 0);
+        case "DELAY_ASC":
+          return (a.delayDays ?? 0) - (b.delayDays ?? 0);
+        case "ASSET_ASC":
+          return a.asset.serialNumber.localeCompare(b.asset.serialNumber);
+        default:
+          return 0;
+      }
+    });
+  }, [data?.loans, auditSortBy]);
 
   useEffect(() => {
     if (!session) return;
@@ -155,8 +176,8 @@ export function AuditPage() {
           <div className="filter-actions"><Button type="submit"><Filter size={15} /> Aplicar</Button><Button type="button" variant="quiet" onClick={resetFilters}><RotateCcw size={15} /> Limpiar</Button></div>
         </form>
       </section>
-      <section className="work-section"><div className="section-toolbar"><div className="toolbar-title"><ShieldCheck size={17} /><strong>Movimientos registrados</strong><span>{data?.totalElements ?? 0}</span></div><div className="audit-export-actions"><span className="toolbar-note">PÁGINA {page + 1} DE {Math.max(data?.totalPages ?? 1, 1)}</span><Button variant="secondary" onClick={handleExportExcel} disabled={loading || !data?.loans.length}><FileSpreadsheet size={14} /> Excel</Button><Button variant="secondary" onClick={handleExportPDF} disabled={loading || !data?.loans.length}><FileText size={14} /> PDF</Button></div></div>
-        {loading ? <LoadingRows label="Consultando auditoría" /> : !data?.loans.length ? <EmptyState title="No hay movimientos" detail="Cambia los filtros para consultar otros registros." /> : <DataTable headings={["Fecha", "Activo", "Técnico", "Estado", "Vencimiento", "Devolución", "Inspector"]}>{data.loans.map((loan) => <tr key={loan.id}><td className="telemetry-value font-mono">{loan.requestDate?.replace("T", " ").slice(0, 16) ?? "—"}</td><td><span className="copy-value"><span className="table-primary mono-cell telemetry-value font-mono">{loan.asset.serialNumber}</span><CopyButton text={loan.asset.serialNumber} label={`Copiar serie ${loan.asset.serialNumber}`} /></span><small className="table-secondary">{loan.asset.model}</small><small className="table-secondary id-copy-line font-mono">ID <span>{loan.id}</span><CopyButton className="inline-copy" text={loan.id} label={`Copiar ID del préstamo de ${loan.asset.serialNumber}`} /></small></td><td>{loan.user?.fullName || loan.user?.email || "—"}</td><td><StatusTag value={loan.status} /></td><td className="telemetry-value font-mono">{loan.dueLocalDate || "—"}</td><td className="telemetry-value font-mono">{loan.returnDateTime?.slice(0, 10) ?? "—"}{loan.returnCondition && <small className="table-secondary"><StatusTag value={loan.returnCondition} /></small>}</td><td>{loan.inspector?.fullName || "—"}</td></tr>)}</DataTable>}
+      <section className="work-section"><div className="section-toolbar"><div className="toolbar-title"><ShieldCheck size={17} /><strong>Movimientos registrados</strong><span>{data?.totalElements ?? 0}</span></div><div className="audit-export-actions"><SelectInput className="filter-select" value={auditSortBy} onChange={(event) => setAuditSortBy(event.target.value)} aria-label="Ordenar registros de auditoría"><option value="DATE_DESC">Fecha solicitud (Reciente)</option><option value="DATE_ASC">Fecha solicitud (Antigua)</option><option value="DELAY_DESC">Días de mora (Mayor)</option><option value="DELAY_ASC">Días de mora (Menor)</option><option value="ASSET_ASC">Activo (A-Z)</option></SelectInput><span className="toolbar-note">PÁGINA {page + 1} DE {Math.max(data?.totalPages ?? 1, 1)}</span><Button variant="secondary" onClick={handleExportExcel} disabled={loading || !data?.loans.length}><FileSpreadsheet size={14} /> Excel</Button><Button variant="secondary" onClick={handleExportPDF} disabled={loading || !data?.loans.length}><FileText size={14} /> PDF</Button></div></div>
+        {loading ? <LoadingRows label="Consultando auditoría" /> : !data?.loans.length ? <EmptyState title="No hay movimientos" detail="Cambia los filtros para consultar otros registros." /> : <DataTable headings={["Fecha", "Activo", "Técnico", "Estado", "Vencimiento", "Devolución", "Inspector"]}>{sortedLoans.map((loan) => <tr key={loan.id}><td className="telemetry-value font-mono">{loan.requestDate?.replace("T", " ").slice(0, 16) ?? "—"}</td><td><span className="copy-value"><span className="table-primary mono-cell telemetry-value font-mono">{loan.asset.serialNumber}</span><CopyButton text={loan.asset.serialNumber} label={`Copiar serie ${loan.asset.serialNumber}`} /></span><small className="table-secondary">{loan.asset.model}</small><small className="table-secondary id-copy-line font-mono">ID <span>{loan.id}</span><CopyButton className="inline-copy" text={loan.id} label={`Copiar ID del préstamo de ${loan.asset.serialNumber}`} /></small></td><td>{loan.user?.fullName || loan.user?.email || "—"}</td><td><StatusTag value={loan.status} /></td><td className="telemetry-value font-mono">{loan.dueLocalDate || "—"}</td><td className="telemetry-value font-mono">{loan.returnDateTime?.slice(0, 10) ?? "—"}{loan.returnCondition && <small className="table-secondary"><StatusTag value={loan.returnCondition} /></small>}</td><td>{loan.inspector?.fullName || "—"}</td></tr>)}</DataTable>}
         <PaginationControls
           currentPage={page}
           totalItems={data?.totalElements ?? 0}

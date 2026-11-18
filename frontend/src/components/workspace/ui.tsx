@@ -1,9 +1,37 @@
 import { useEffect, useId, useRef, useState, type ReactNode, type Ref } from "react";
+import { createPortal } from "react-dom";
 import { AlertCircle, Check, CheckCircle2, Copy, LoaderCircle, X } from "lucide-react";
 import { motion } from "framer-motion";
 import { useCurrency } from "@/components/currency-provider";
 import { statusLabel } from "@/lib/localization";
 import { formatCurrency } from "@/lib/utils";
+
+export function useLockBodyScroll(open: boolean) {
+  useEffect(() => {
+    if (!open || typeof document === "undefined") return;
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, [open]);
+}
+
+export function ModalPortal({ children }: { children: ReactNode }) {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useLockBodyScroll(mounted);
+
+  if (!mounted || typeof document === "undefined") {
+    return null;
+  }
+
+  return createPortal(children, document.body);
+}
 
 export function useEscapeKey(active: boolean, onEscape: () => void) {
   useEffect(() => {
@@ -134,43 +162,46 @@ export function Dialog({
   const titleId = useId();
   const dialogRef = useModalFocus(open);
   useEscapeKey(open, onClose);
+  useLockBodyScroll(open);
 
   if (!open) return null;
 
   return (
-    <motion.div
-      className="modal-backdrop"
-      role="presentation"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.18 }}
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
-      }}
-    >
-      <motion.section
-        ref={dialogRef}
-        tabIndex={-1}
-        className="work-modal detail-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        initial={{ opacity: 0, y: 8, scale: 0.98 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        transition={{ duration: 0.2, ease: "easeOut" }}
+    <ModalPortal>
+      <motion.div
+        className="modal-backdrop"
+        role="presentation"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.18 }}
+        onMouseDown={(event) => {
+          if (event.target === event.currentTarget) onClose();
+        }}
       >
-        <div className="modal-heading">
-          <div>
-            {eyebrow && <p className="work-eyebrow">{eyebrow}</p>}
-            <h2 id={titleId}>{title}</h2>
+        <motion.section
+          ref={dialogRef}
+          tabIndex={-1}
+          className="work-modal detail-dialog"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={titleId}
+          initial={{ opacity: 0, y: 8, scale: 0.98 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ duration: 0.2, ease: "easeOut" }}
+        >
+          <div className="modal-heading">
+            <div>
+              {eyebrow && <p className="work-eyebrow">{eyebrow}</p>}
+              <h2 id={titleId}>{title}</h2>
+            </div>
+            <button type="button" className="table-action" aria-label="Cerrar detalle" onClick={onClose}>
+              <X size={17} />
+            </button>
           </div>
-          <button type="button" className="table-action" aria-label="Cerrar detalle" onClick={onClose}>
-            <X size={17} />
-          </button>
-        </div>
-        {children}
-      </motion.section>
-    </motion.div>
+          {children}
+        </motion.section>
+      </motion.div>
+    </ModalPortal>
   );
 }
 
@@ -199,49 +230,52 @@ export function ConfirmDialog({
   const messageId = useId();
   const dialogRef = useModalFocus(open);
   useEscapeKey(open && !loading, onCancel);
+  useLockBodyScroll(open);
 
   if (!open) return null;
 
   return (
-    <motion.div
-      className="modal-backdrop confirmation-backdrop"
-      role="presentation"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.18 }}
-      onMouseDown={(event) => {
-        if (!loading && event.target === event.currentTarget) onCancel();
-      }}
-    >
-      <motion.section
-        ref={dialogRef}
-        tabIndex={-1}
-        className="work-modal confirm-dialog"
-        role="alertdialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        aria-describedby={messageId}
-        initial={{ opacity: 0, y: 8, scale: 0.98 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        transition={{ duration: 0.2, ease: "easeOut" }}
+    <ModalPortal>
+      <motion.div
+        className="modal-backdrop confirmation-backdrop"
+        role="presentation"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.18 }}
+        onMouseDown={(event) => {
+          if (!loading && event.target === event.currentTarget) onCancel();
+        }}
       >
-        <div className="modal-heading">
-          <div>
-            <p className="work-eyebrow">CONFIRMACIÓN</p>
-            <h2 id={titleId}>{title}</h2>
+        <motion.section
+          ref={dialogRef}
+          tabIndex={-1}
+          className="work-modal confirm-dialog"
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby={titleId}
+          aria-describedby={messageId}
+          initial={{ opacity: 0, y: 8, scale: 0.98 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ duration: 0.2, ease: "easeOut" }}
+        >
+          <div className="modal-heading">
+            <div>
+              <p className="work-eyebrow">CONFIRMACIÓN</p>
+              <h2 id={titleId}>{title}</h2>
+            </div>
           </div>
-        </div>
-        <div id={messageId} className="legal-notice-copy confirm-message">{message}</div>
-        <div className="modal-actions">
-          <Button variant="secondary" type="button" disabled={loading} onClick={onCancel}>
-            {cancelLabel}
-          </Button>
-          <Button variant={confirmVariant} type="button" loading={loading} onClick={onConfirm}>
-            {confirmLabel}
-          </Button>
-        </div>
-      </motion.section>
-    </motion.div>
+          <div id={messageId} className="legal-notice-copy confirm-message">{message}</div>
+          <div className="modal-actions">
+            <Button variant="secondary" type="button" disabled={loading} onClick={onCancel}>
+              {cancelLabel}
+            </Button>
+            <Button variant={confirmVariant} type="button" loading={loading} onClick={onConfirm}>
+              {confirmLabel}
+            </Button>
+          </div>
+        </motion.section>
+      </motion.div>
+    </ModalPortal>
   );
 }
 
@@ -402,8 +436,8 @@ export function TextInput(props: React.InputHTMLAttributes<HTMLInputElement> & {
 }
 
 export function SelectInput(props: React.SelectHTMLAttributes<HTMLSelectElement> & { selectRef?: Ref<HTMLSelectElement> }) {
-  const { selectRef, ...selectProps } = props;
-  return <select ref={selectRef} className="work-input" {...selectProps} />;
+  const { className = "", selectRef, ...selectProps } = props;
+  return <select ref={selectRef} className={`work-input ${className}`.trim()} {...selectProps} />;
 }
 
 export function InlineActions({ children }: { children: ReactNode }) {
