@@ -388,7 +388,7 @@ button { color: inherit; transition: background-color 300ms ease-in-out, color 3
 .topbar-right { display: flex; align-items: center; gap: 20px; }
 .environment-pill { display: inline-flex; align-items: center; gap: 7px; color: #718078; font-size: 8px; font-weight: 750; letter-spacing: .7px; }
 .topbar-date { color: #929b95; font-size: 10px; }
-.page-content { width: 100%; max-width: 1320px; flex: 1; margin: 0 auto; padding: 40px 42px 45px; animation: page-enter 220ms ease-out both; }
+.page-content { width: 100%; max-width: 1600px; flex: 1; margin: 0 auto; padding: 40px 42px 45px; animation: page-enter 220ms ease-out both; }
 @keyframes page-enter {
   from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: translateY(0); }
