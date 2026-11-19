@@ -23,7 +23,7 @@ import { WorkspaceTools } from "@/components/workspace/workspace-tools";
 import { LostReportsBell } from "@/components/workspace/lost-reports-dialog";
 import { CorporateFooter } from "@/components/corporate-footer";
 import { ConfirmDialog, ModalPortal, useEscapeKey, useModalFocus } from "@/components/workspace/ui";
-import { landingPath } from "@/lib/auth";
+import { getDisplayUserName, landingPath } from "@/lib/auth";
 import { roleLabel } from "@/lib/localization";
 
 const navigation = [
@@ -162,13 +162,13 @@ export function ProtectedShell({ children }: { children: ReactNode }) {
             className="profile-trigger"
             type="button"
             onClick={() => setProfileOpen(true)}
-            aria-label={`Ver perfil de ${session.user.fullName || session.user.email}`}
+            aria-label={`Ver perfil de ${getDisplayUserName(session.user)}`}
           >
             <span className="avatar">
               <Image src="/AssetGuard_2620_isotipo_app.png" alt="" width={24} height={24} className="object-contain" />
             </span>
             <span className="profile-copy">
-              <strong>{session.user.fullName || session.user.email}</strong>
+              <strong>{getDisplayUserName(session.user)}</strong>
               <small>{roleLabel(session.user.role)}</small>
             </span>
           </button>
@@ -243,7 +243,7 @@ export function ProtectedShell({ children }: { children: ReactNode }) {
                   <Image src="/AssetGuard_2620_isotipo_app.png" alt="" width={34} height={34} className="object-contain" />
                 </span>
                 <div>
-                  <strong>{session.user.fullName?.trim() || roleLabel(session.user.role) || "Usuario"}</strong>
+                  <strong>{getDisplayUserName(session.user)}</strong>
                   <span>{session.user.email}</span>
                 </div>
               </div>

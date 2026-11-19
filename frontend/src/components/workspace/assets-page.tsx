@@ -63,7 +63,7 @@ export function AssetsPage() {
 
   useEffect(() => {
     if (isAdmin) {
-      queryGraphQL<{ users: UserItem[] }>(USERS_QUERY, { limit: 100 })
+      queryGraphQL<{ users: UserItem[] }>(USERS_QUERY, { limit: 1000 })
         .then((res) => setTechnicians(res.users.filter((u) => u.role === "TECHNICIAN" && u.status)))
         .catch(() => {});
       queryGraphQL<{ providers: ProviderItem[] }>(PROVIDERS_QUERY)

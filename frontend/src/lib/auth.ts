@@ -15,6 +15,15 @@ export type AuthSession = {
 
 const SESSION_KEY = "assetguard.session";
 
+export function getDisplayUserName(user: { fullName?: string | null; email: string }): string {
+  const trimmed = user.fullName?.trim();
+  if (trimmed && trimmed.toLowerCase() !== user.email.trim().toLowerCase()) {
+    return trimmed;
+  }
+  const alias = user.email.split("@")[0]?.trim();
+  return alias || "Usuario";
+}
+
 export function readSession(): AuthSession | null {
   if (typeof window === "undefined") return null;
   try {
@@ -23,12 +32,15 @@ export function readSession(): AuthSession | null {
     const session = JSON.parse(raw) as AuthSession;
     if (!session.token || !session.user?.role || !session.user?.email) return null;
     if (!["ADMIN", "INSPECTOR", "TECHNICIAN"].includes(session.user.role)) return null;
+    session.user.fullName = getDisplayUserName(session.user);
     return session;
   } catch {
     window.localStorage.removeItem(SESSION_KEY);
     return null;
   }
 }
+
+export const getSession = readSession;
 
 export function saveSession(session: AuthSession): void {
   window.localStorage.setItem(SESSION_KEY, JSON.stringify(session));

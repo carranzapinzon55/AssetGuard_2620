@@ -4,7 +4,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { ArrowRight, Eye, EyeOff, KeyRound, LoaderCircle, LockKeyhole, Mail, ShieldCheck } from "lucide-react";
-import { landingPath, type UserRole } from "@/lib/auth";
+import { getDisplayUserName, landingPath, type UserRole } from "@/lib/auth";
 import { createGraphQLClient, LOGIN_MUTATION } from "@/lib/graphql";
 import { useAuth } from "@/components/auth-provider";
 import { CorporateFooter } from "@/components/corporate-footer";
@@ -86,7 +86,10 @@ export function LoginForm() {
       const user = {
         id: String(jwtPayload.id ?? ""),
         email: userEmail,
-        fullName: typeof jwtPayload.fullName === "string" ? jwtPayload.fullName : userEmail,
+        fullName: getDisplayUserName({
+          fullName: typeof jwtPayload.fullName === "string" ? jwtPayload.fullName : null,
+          email: userEmail,
+        }),
         role: userRole,
         status: true,
       };

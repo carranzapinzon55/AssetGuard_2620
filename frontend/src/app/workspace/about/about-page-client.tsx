@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useAuth } from "@/components/auth-provider";
 import { PageTitle } from "@/components/workspace/ui";
+import { getDisplayUserName } from "@/lib/auth";
 import { roleLabel } from "@/lib/localization";
 
 export default function AboutPageClient() {
@@ -45,7 +46,7 @@ export default function AboutPageClient() {
               className="h-14 w-14 shrink-0 object-contain"
             />
             <div className="min-w-0">
-              <p className="break-words text-base font-semibold text-slate-900 dark:text-slate-100">{user?.fullName?.trim() || (user ? roleLabel(user.role) : "No disponible")}</p>
+              <p className="break-words text-base font-semibold text-slate-900 dark:text-slate-100">{user ? getDisplayUserName(user) : "No disponible"}</p>
               <p className="mt-1 break-all text-sm text-slate-600 dark:text-slate-300">{user?.email || "No disponible"}</p>
             </div>
           </div>
