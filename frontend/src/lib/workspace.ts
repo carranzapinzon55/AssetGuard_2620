@@ -73,6 +73,7 @@ export type AssetItem = {
   status: string;
   purchaseDate: string | null;
   stockQuantity: number | null;
+  availableQuantity: number;
 };
 
 export type UserItem = {
@@ -104,7 +105,7 @@ export type MaintenanceItem = {
   cost: number | null;
   startDate: string | null;
   endDate: string | null;
-  asset: Pick<AssetItem, "id" | "serialNumber" | "model" | "status">;
+  asset: Pick<AssetItem, "id" | "serialNumber" | "model" | "estimatedValue" | "status">;
 };
 
 export type ProviderItem = {

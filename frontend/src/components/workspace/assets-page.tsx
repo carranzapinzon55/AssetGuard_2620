@@ -260,6 +260,10 @@ export function AssetsPage() {
   async function persistAsset() {
     setSaving(true);
     setFeedback({});
+    const stockQuantityValue = form.status === "AVAILABLE"
+      ? (form.stockQuantity ? Number(form.stockQuantity) : 1)
+      : (editing ? (editing.stockQuantity ?? 1) : 1);
+
     const input: Record<string, unknown> = {
       model: form.model.trim() || null,
       estimatedValue: form.estimatedValue
@@ -267,7 +271,7 @@ export function AssetsPage() {
         : null,
       purchaseDate: form.purchaseDate || null,
       status: form.status,
-      stockQuantity: form.stockQuantity ? Number(form.stockQuantity) : 1,
+      stockQuantity: stockQuantityValue,
     };
     if (form.status === "LOANED") {
       input.loanTechnicianId = loanTechnicianId;
@@ -344,7 +348,11 @@ export function AssetsPage() {
                 <td>{asset.model || "—"}</td>
                 {!isTechnician && <><td>{asset.estimatedValue == null ? "—" : <CurrencyDisplay usdAmount={asset.estimatedValue} />}</td>
                 <td className="telemetry-value font-mono">{asset.purchaseDate ?? "—"}</td></>}
-                <td className="telemetry-value font-mono">{asset.stockQuantity ?? 1}</td>
+                <td className="telemetry-value font-mono">
+                  {asset.availableQuantity != null
+                    ? `${asset.availableQuantity} / ${asset.stockQuantity ?? 1} ${asset.availableQuantity === 1 ? "disponible" : "disponibles"}`
+                    : `${asset.stockQuantity ?? 1} / ${asset.stockQuantity ?? 1} disponibles`}
+                </td>
                 <td><StatusTag value={asset.status} /></td>
                 {isAdmin && (
                   <td>
@@ -534,9 +542,38 @@ export function AssetsPage() {
                   </FormField>
                 </div>
               )}
-              <FormField label="Unidades / Stock">
-                <TextInput type="number" min="1" step="1" value={form.stockQuantity} onChange={(event) => setForm({ ...form, stockQuantity: event.target.value })} required />
-              </FormField>
+              {form.status === "AVAILABLE" ? (
+                <FormField label={editing ? "Unidades / Stock (Ajuste de inventario)" : "Unidades / Stock"}>
+                  <TextInput
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={form.stockQuantity}
+                    onChange={(event) => setForm({ ...form, stockQuantity: event.target.value })}
+                    required
+                  />
+                  <small className="form-hint">
+                    {editing
+                      ? `Stock total en inventario (${editing.availableQuantity ?? editing.stockQuantity ?? 1} de ${editing.stockQuantity ?? 1} disponibles).`
+                      : "Unidades iniciales del equipo para registrar en el inventario."}
+                  </small>
+                </FormField>
+              ) : (
+                <FormField label="Unidades / Stock (Protegido / Solo lectura)">
+                  <TextInput
+                    type="text"
+                    value={editing ? `${editing.stockQuantity ?? 1} unidades (Stock total protegido)` : "1 unidad física"}
+                    readOnly
+                    disabled
+                    className="bg-neutral-100 dark:bg-neutral-800 cursor-not-allowed opacity-80"
+                  />
+                  <small className="form-hint">
+                    {editing
+                      ? `El stock total (${editing.stockQuantity ?? 1} unidades) no se modifica. Este movimiento impacta únicamente 1 unidad física del equipo.`
+                      : "El registro inicial en este estado impacta únicamente 1 unidad física del equipo."}
+                  </small>
+                </FormField>
+              )}
               <Feedback error={feedback.error} />
               <div className="modal-actions">
                 <Button variant="secondary" type="button" onClick={() => setFormOpen(false)}>Cancelar</Button>

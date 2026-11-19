@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { usePathname } from "next/navigation";
 import { CalendarClock, Check, ChevronDown, CircleAlert, ClipboardList, Laptop, RotateCcw, Search, X } from "lucide-react";
 import { motion } from "framer-motion";
@@ -60,7 +60,7 @@ export function LoansPage() {
   const [loanSearch, setLoanSearch] = useState("");
   const [loanStatusFilter, setLoanStatusFilter] = useState("ALL");
   const [loanSortBy, setLoanSortBy] = useState(inspector ? "PENDING_FIRST" : "REQUEST_DATE_DESC");
-  const [loansExpanded, setLoansExpanded] = useState(!technician);
+  const [loansExpanded, setLoansExpanded] = useState(false);
   const [selectedRejection, setSelectedRejection] = useState<LoanItem | null>(null);
 
   useEscapeKey(!saving && (showRequest || rejecting !== null || (returning !== null && !returnConfirmationOpen)), () => {
@@ -80,28 +80,66 @@ export function LoansPage() {
     setReturnConfirmationOpen(false);
   }, [pathname]);
 
+  const fetchLoansData = useCallback(async (silent = false) => {
+    if (!role) return;
+    if (!silent) setLoading(true);
+    try {
+      const assetsRequest = queryGraphQL<AssetsResult>(ASSETS_CATALOG_QUERY);
+      if (technician) {
+        const [history, assets] = await Promise.all([
+          queryGraphQL<HistoryResult>(MY_LOAN_HISTORY),
+          assetsRequest,
+        ]);
+        setLoans(history.myLoanHistory);
+        setCatalogAssets(assets.assets);
+      } else {
+        const [result, assets] = await Promise.all([
+          queryGraphQL<LoansResult>(LOANS_QUERY),
+          assetsRequest,
+        ]);
+        setLoans(result.loans);
+        setCatalogAssets(assets.assets);
+      }
+    } catch (error: unknown) {
+      if (!silent) setFeedback({ error: errorMessage(error) });
+    } finally {
+      if (!silent) setLoading(false);
+    }
+  }, [role, technician]);
+
+  useEffect(() => {
+    void fetchLoansData(false);
+  }, [fetchLoansData, refresh]);
+
   useEffect(() => {
     if (!role) return;
-    let active = true;
-    const assetsRequest = queryGraphQL<AssetsResult>(ASSETS_CATALOG_QUERY);
-    const dataRequest = technician
-      ? Promise.all([queryGraphQL<HistoryResult>(MY_LOAN_HISTORY), assetsRequest])
-          .then(([history, assets]) => {
-            if (!active) return;
-            setLoans(history.myLoanHistory);
-            setCatalogAssets(assets.assets);
-          })
-      : Promise.all([queryGraphQL<LoansResult>(LOANS_QUERY), assetsRequest]).then(([result, assets]) => {
-          if (active) {
-            setLoans(result.loans);
-            setCatalogAssets(assets.assets);
-          }
-        });
-    dataRequest
-      .catch((error: unknown) => { if (active) setFeedback({ error: errorMessage(error) }); })
-      .finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
-  }, [role, technician, session?.token, refresh]);
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        void fetchLoansData(true);
+      }
+    }, 8000);
+
+    function handleFocusOrVisibility() {
+      if (document.visibilityState === "visible") {
+        void fetchLoansData(true);
+      }
+    }
+
+    function handleLoansUpdated() {
+      void fetchLoansData(true);
+    }
+
+    window.addEventListener("focus", handleFocusOrVisibility);
+    document.addEventListener("visibilitychange", handleFocusOrVisibility);
+    window.addEventListener("loans-updated", handleLoansUpdated);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", handleFocusOrVisibility);
+      document.removeEventListener("visibilitychange", handleFocusOrVisibility);
+      window.removeEventListener("loans-updated", handleLoansUpdated);
+    };
+  }, [role, fetchLoansData]);
 
   const overdue = loans.some((loan) => loan.status === "APPROVED" && (loan.delayDays ?? 0) > 0);
   const pendingLoans = loans.filter((loan) => loan.status === "PENDING").length;
@@ -142,24 +180,26 @@ export function LoansPage() {
   }, [filteredLoans, loanSortBy]);
 
   const isAdmin = role === "ADMIN";
-  const availableAssets = catalogAssets.filter((asset) => asset.status === "AVAILABLE");
+  const availableAssets = catalogAssets.filter((asset) => (asset.availableQuantity ?? 0) > 0);
   const filteredCatalogAssets = useMemo(() => catalogAssets.filter((asset) => {
     const matchesText = matchesSearch(`${asset.serialNumber} ${asset.model ?? ""}`, catalogSearch);
+    const isAvailable = (asset.availableQuantity ?? 0) > 0;
     const matchesAvailability = availabilityFilter === "ALL"
-      || (availabilityFilter === "AVAILABLE" ? asset.status === "AVAILABLE" : asset.status !== "AVAILABLE");
+      || (availabilityFilter === "AVAILABLE" ? isAvailable : !isAvailable);
     return matchesText && matchesAvailability;
   }), [catalogAssets, catalogSearch, availabilityFilter]);
   const visibleCatalogAssets = filteredCatalogAssets.slice(catalogPage * catalogPageSize, (catalogPage + 1) * catalogPageSize);
   const visibleLoans = rows.slice(loanPage * loanPageSize, (loanPage + 1) * loanPageSize);
-  const assetOptions = availableAssets.map((asset) => ({
-    value: asset.id,
-    label: `${asset.serialNumber} · ${asset.model ?? "Activo"}`,
-  }));
+  const assetOptions = availableAssets.map((asset) => {
+    const total = asset.stockQuantity ?? 1;
+    const avail = asset.availableQuantity ?? 0;
+    const label = `${avail} / ${total} ${avail === 1 ? "disponible" : "disponibles"}`;
+    return {
+      value: asset.id,
+      label: `${asset.serialNumber} · ${asset.model ?? "Activo"} (${label})`,
+    };
+  });
   const selectedAsset = catalogAssets.find((asset) => asset.id === assetId);
-
-  useEffect(() => {
-    if (inspector && pendingLoans > 0) setLoansExpanded(true);
-  }, [inspector, pendingLoans]);
 
   async function submitRequest(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -208,6 +248,7 @@ export function LoansPage() {
         },
       });
       setRequestConfirmationOpen(false); setAssetId(""); setLoanDate(today); setLoanTime("08:00"); setDueDate(""); setDueTime("09:00"); setLoanPage(0); setFeedback({ success: "Solicitud enviada para revisión." }); setRefresh((value) => value + 1);
+      window.dispatchEvent(new CustomEvent("loans-updated"));
     } catch (error) {
       setRequestConfirmationOpen(false);
       setShowRequest(true);
@@ -218,9 +259,17 @@ export function LoansPage() {
 
   async function approve(loan: LoanItem) {
     setSaving(true); setFeedback({});
-    try { await queryGraphQL<MutationResult>(APPROVE_LOAN, { input: { loanId: loan.id } }); setLoanPage(0); setFeedback({ success: `Solicitud de ${loan.asset.serialNumber} aprobada.` }); setRefresh((value) => value + 1); }
-    catch (error) { setFeedback({ error: errorMessage(error) }); }
-    finally { setSaving(false); }
+    try {
+      await queryGraphQL<MutationResult>(APPROVE_LOAN, { input: { loanId: loan.id } });
+      setLoanPage(0);
+      setFeedback({ success: `Solicitud de ${loan.asset.serialNumber} aprobada.` });
+      setRefresh((value) => value + 1);
+      window.dispatchEvent(new CustomEvent("loans-updated"));
+    } catch (error) {
+      setFeedback({ error: errorMessage(error) });
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function reject(event: FormEvent<HTMLFormElement>) {
@@ -231,9 +280,19 @@ export function LoansPage() {
       return;
     }
     setSaving(true); setFeedback({});
-    try { await queryGraphQL<MutationResult>(REJECT_LOAN, { input: { loanId: rejecting.id, reason: rejectionReason } }); setRejecting(null); setReason(""); setLoanPage(0); setFeedback({ success: "Solicitud rechazada." }); setRefresh((value) => value + 1); }
-    catch (error) { setFeedback({ error: errorMessage(error) }); }
-    finally { setSaving(false); }
+    try {
+      await queryGraphQL<MutationResult>(REJECT_LOAN, { input: { loanId: rejecting.id, reason: rejectionReason } });
+      setRejecting(null);
+      setReason("");
+      setLoanPage(0);
+      setFeedback({ success: "Solicitud rechazada." });
+      setRefresh((value) => value + 1);
+      window.dispatchEvent(new CustomEvent("loans-updated"));
+    } catch (error) {
+      setFeedback({ error: errorMessage(error) });
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function returnLoan(event: FormEvent<HTMLFormElement>) {
@@ -253,7 +312,7 @@ export function LoansPage() {
         input: {
           loanId: returning.id,
           condition,
-          damageDescription: condition === "DAMAGED" ? damageDescription.trim() : null,
+          damageDescription: (condition === "DAMAGED" || condition === "LOST") && damageDescription.trim() ? damageDescription.trim() : null,
         },
       });
       setReturning(null);
@@ -261,6 +320,10 @@ export function LoansPage() {
       setLoanPage(0);
       setFeedback({ success: `Devolución registrada: ${statusLabel(condition).toLowerCase()}.` });
       setRefresh((value) => value + 1);
+      window.dispatchEvent(new CustomEvent("loans-updated"));
+      if (condition === "LOST") {
+        window.dispatchEvent(new CustomEvent("lost-reports-updated"));
+      }
     }
     catch (error) { setFeedback({ error: errorMessage(error) }); }
     finally { setReturnConfirmationOpen(false); setSaving(false); }
@@ -272,24 +335,6 @@ export function LoansPage() {
       <PageTitle eyebrow={technician ? "CUSTODIAS · TÉCNICO" : inspector ? "OPERACIONES · INSPECCIÓN" : "OPERACIONES · CUSTODIAS"} title={title} description={technician ? "Explora el catálogo, solicita equipos y sigue el estado de tus custodias." : inspector ? "Revisa solicitudes pendientes y registra devoluciones físicas." : "Consulta el ciclo de vida de solicitudes y custodias."} action={technician ? <Button onClick={() => { setAssetId(""); setShowRequest(true); }} disabled={overdue}><CalendarClock size={16} /> Solicitar préstamo</Button> : undefined} />
       {overdue && <div className="work-feedback error" role="alert"><CircleAlert size={16} /><span>Tienes una devolución vencida. No puedes solicitar nuevos préstamos hasta regularizarla.</span></div>}
       <Feedback {...feedback} />
-      <section className="loan-catalog-section" aria-label="Catálogo de activos para préstamos">
-        <div className="section-toolbar"><div className="toolbar-title"><Laptop size={17} /><strong>Catálogo de activos</strong><span>{filteredCatalogAssets.length}</span></div><div className="toolbar-controls"><label className="search-control"><Search size={16} /><input value={catalogSearch} onChange={(event) => { setCatalogSearch(event.target.value); setCatalogPage(0); }} placeholder="Buscar por modelo o serie" aria-label="Buscar activos por modelo o número de serie" /></label><SelectInput className="filter-select" value={availabilityFilter} onChange={(event) => { setAvailabilityFilter(event.target.value as typeof availabilityFilter); setCatalogPage(0); }} aria-label="Filtrar por disponibilidad"><option value="ALL">Todos</option><option value="AVAILABLE">Disponible</option><option value="UNAVAILABLE">No disponible</option></SelectInput></div></div>
-        {loading ? <LoadingRows label="Cargando catálogo de activos" /> : filteredCatalogAssets.length === 0 ? <EmptyState title={catalogAssets.length === 0 ? "Catálogo vacío" : "Sin coincidencias"} detail={catalogAssets.length === 0 ? "No hay activos disponibles para mostrar." : "Prueba con otro modelo, serie o disponibilidad."} /> : (
-          <div className="loan-asset-grid">
-            {visibleCatalogAssets.map((asset) => {
-              const isAvailable = asset.status === "AVAILABLE";
-              const brand = asset.model?.trim().split(/\s+/)[0] || "GlobalNet";
-              return (
-                <button className="loan-asset-card" type="button" key={asset.id} onClick={() => { setAssetId(asset.id); setShowRequest(true); }}>
-                  <span className="asset-card-photo"><Laptop size={34} strokeWidth={1.3} /><span className={`asset-availability ${isAvailable ? "available" : "unavailable"}`}><i />{isAvailable ? "Disponible" : "No disponible"}</span></span>
-                  <span className="asset-card-copy"><span className="asset-card-brand">{brand}</span><strong>{asset.model || "Activo"}</strong><small className="telemetry-value">{asset.serialNumber}</small></span>
-                </button>
-              );
-            })}
-          </div>
-        )}
-        <PaginationControls currentPage={catalogPage} totalItems={filteredCatalogAssets.length} pageSize={catalogPageSize} onPageChange={setCatalogPage} onPageSizeChange={(size) => { setCatalogPageSize(size); setCatalogPage(0); }} loading={loading} itemLabel="activos" />
-      </section>
       <section className="work-section">
         <div className="section-toolbar loan-history-toolbar">
           <div className="toolbar-title"><ClipboardList size={17} /><strong>{inspector ? "Bandeja de préstamos" : technician ? "Historial de préstamos" : "Todos los préstamos"}</strong><span>{rows.length}</span>{inspector && <span className="pending-count">{pendingLoans} pendientes</span>}</div>
@@ -333,13 +378,48 @@ export function LoansPage() {
         <PaginationControls currentPage={loanPage} totalItems={rows.length} pageSize={loanPageSize} onPageChange={setLoanPage} onPageSizeChange={(size) => { setLoanPageSize(size); setLoanPage(0); }} loading={loading} itemLabel="préstamos" />
         </div>
       </section>
+      <section className="loan-catalog-section" aria-label="Catálogo de activos para préstamos">
+        <div className="section-toolbar"><div className="toolbar-title"><Laptop size={17} /><strong>Catálogo de activos</strong><span>{filteredCatalogAssets.length}</span></div><div className="toolbar-controls"><label className="search-control"><Search size={16} /><input value={catalogSearch} onChange={(event) => { setCatalogSearch(event.target.value); setCatalogPage(0); }} placeholder="Buscar por modelo o serie" aria-label="Buscar activos por modelo o número de serie" /></label><SelectInput className="filter-select" value={availabilityFilter} onChange={(event) => { setAvailabilityFilter(event.target.value as typeof availabilityFilter); setCatalogPage(0); }} aria-label="Filtrar por disponibilidad"><option value="ALL">Todos</option><option value="AVAILABLE">Disponible</option><option value="UNAVAILABLE">No disponible</option></SelectInput></div></div>
+        {loading ? <LoadingRows label="Cargando catálogo de activos" /> : filteredCatalogAssets.length === 0 ? <EmptyState title={catalogAssets.length === 0 ? "Catálogo vacío" : "Sin coincidencias"} detail={catalogAssets.length === 0 ? "No hay activos disponibles para mostrar." : "Prueba con otro modelo, serie o disponibilidad."} /> : (
+          <div className="loan-asset-grid">
+            {visibleCatalogAssets.map((asset) => {
+              const isAvailable = (asset.availableQuantity ?? 0) > 0;
+              const brand = asset.model?.trim().split(/\s+/)[0] || "GlobalNet";
+              const total = asset.stockQuantity ?? 1;
+              const avail = asset.availableQuantity ?? 0;
+              const availabilityText = isAvailable
+                ? `${avail} / ${total} ${avail === 1 ? "disponible" : "disponibles"}`
+                : `No disponible (0 / ${total})`;
+              return (
+                <button className="loan-asset-card" type="button" key={asset.id} onClick={() => { setAssetId(asset.id); setShowRequest(true); }}>
+                  <span className="asset-card-photo"><Laptop size={34} strokeWidth={1.3} /><span className={`asset-availability ${isAvailable ? "available" : "unavailable"}`}><i />{availabilityText}</span></span>
+                  <span className="asset-card-copy"><span className="asset-card-brand">{brand}</span><strong>{asset.model || "Activo"}</strong><small className="telemetry-value">{asset.serialNumber}</small></span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+        <PaginationControls currentPage={catalogPage} totalItems={filteredCatalogAssets.length} pageSize={catalogPageSize} onPageChange={setCatalogPage} onPageSizeChange={(size) => { setCatalogPageSize(size); setCatalogPage(0); }} loading={loading} itemLabel="activos" />
+      </section>
       {showRequest && !requestConfirmationOpen && (
         <ModalPortal>
           <motion.div className="modal-backdrop asset-drawer-backdrop" role="presentation" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.18 }} onMouseDown={(event) => { if (event.target === event.currentTarget) setShowRequest(false); }}>
             <motion.section ref={requestDialogRef} tabIndex={-1} className="work-modal asset-drawer" role="dialog" aria-modal="true" aria-labelledby="loan-request-title" initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.22, ease: "easeOut" }}>
               <div className="modal-heading"><div><p className="work-eyebrow">CATÁLOGO · NUEVA CUSTODIA</p><h2 id="loan-request-title">{selectedAsset?.model || "Solicitar préstamo"}</h2></div><button className="table-action" type="button" aria-label="Cerrar" onClick={() => setShowRequest(false)}><X size={17} /></button></div>
-              {selectedAsset && <div className="drawer-asset-summary"><span className="drawer-asset-photo"><Laptop size={44} strokeWidth={1.2} /></span><span className={`asset-availability ${selectedAsset.status === "AVAILABLE" ? "available" : "unavailable"}`}><i />{selectedAsset.status === "AVAILABLE" ? "Disponible" : "No disponible"}</span><strong className="telemetry-value">{selectedAsset.serialNumber}</strong><span>{selectedAsset.model || "Activo"}</span></div>}
-              {technician && (!selectedAsset || selectedAsset.status === "AVAILABLE") ? <form className="work-form" onSubmit={submitRequest}><div className="work-field"><span>Activo disponible</span><div className="asset-combobox-row"><Combobox value={assetId} onValueChange={setAssetId} options={assetOptions} placeholder="Selecciona un equipo" searchPlaceholder="Buscar por serie o modelo" emptyMessage="No hay equipos disponibles." required />{selectedAsset && <CopyButton text={selectedAsset.serialNumber} label={`Copiar serie ${selectedAsset.serialNumber}`} />}</div></div><div className="form-grid two-col"><FormField label="Fecha de inicio"><TextInput type="date" value={loanDate} onChange={(event) => setLoanDate(event.target.value)} min={today} required /></FormField><FormField label="Hora de inicio"><TextInput type="time" min="08:00" max="18:00" value={loanTime} onChange={(event) => setLoanTime(event.target.value)} required /></FormField><FormField label="Fecha prevista de devolución"><TextInput type="date" min={loanDate || today} value={dueDate} onChange={(event) => setDueDate(event.target.value)} required /></FormField><FormField label="Hora prevista de devolución"><TextInput type="time" min="08:00" max="18:00" value={dueTime} onChange={(event) => setDueTime(event.target.value)} required /></FormField></div><p className="form-hint">Horario operativo: 08:00–18:00. El préstamo debe durar al menos una hora. La solicitud quedará pendiente hasta la aprobación de un inspector.</p><div className="modal-actions"><Button variant="secondary" type="button" onClick={() => setShowRequest(false)}>Cancelar</Button><Button type="submit" loading={saving} disabled={overdue}>Enviar solicitud</Button></div></form> : <div className="drawer-unavailable"><p>{technician ? "Este activo no está disponible para una nueva solicitud." : "Consulta el estado de este activo en el catálogo."}</p><Button variant="secondary" type="button" onClick={() => setShowRequest(false)}>Cerrar detalle</Button></div>}
+              {selectedAsset && (
+                <div className="drawer-asset-summary">
+                  <span className="drawer-asset-photo"><Laptop size={44} strokeWidth={1.2} /></span>
+                  <span className={`asset-availability ${(selectedAsset.availableQuantity ?? 0) > 0 ? "available" : "unavailable"}`}>
+                    <i />
+                    {(selectedAsset.availableQuantity ?? 0) > 0
+                      ? `${selectedAsset.availableQuantity} / ${selectedAsset.stockQuantity ?? 1} ${selectedAsset.availableQuantity === 1 ? "disponible" : "disponibles"}`
+                      : `No disponible (0 / ${selectedAsset.stockQuantity ?? 1})`}
+                  </span>
+                  <strong className="telemetry-value">{selectedAsset.serialNumber}</strong>
+                  <span>{selectedAsset.model || "Activo"}</span>
+                </div>
+              )}
+              {technician && (!selectedAsset || (selectedAsset.availableQuantity ?? 0) > 0) ? <form className="work-form" onSubmit={submitRequest}><div className="work-field"><span>Activo disponible</span><div className="asset-combobox-row"><Combobox value={assetId} onValueChange={setAssetId} options={assetOptions} placeholder="Selecciona un equipo" searchPlaceholder="Buscar por serie o modelo" emptyMessage="No hay equipos disponibles." required />{selectedAsset && <CopyButton text={selectedAsset.serialNumber} label={`Copiar serie ${selectedAsset.serialNumber}`} />}</div></div><div className="form-grid two-col"><FormField label="Fecha de inicio"><TextInput type="date" value={loanDate} onChange={(event) => setLoanDate(event.target.value)} min={today} required /></FormField><FormField label="Hora de inicio"><TextInput type="time" min="08:00" max="18:00" value={loanTime} onChange={(event) => setLoanTime(event.target.value)} required /></FormField><FormField label="Fecha prevista de devolución"><TextInput type="date" min={loanDate || today} value={dueDate} onChange={(event) => setDueDate(event.target.value)} required /></FormField><FormField label="Hora prevista de devolución"><TextInput type="time" min="08:00" max="18:00" value={dueTime} onChange={(event) => setDueTime(event.target.value)} required /></FormField></div><p className="form-hint">Horario operativo: 08:00–18:00. El préstamo debe durar al menos una hora. La solicitud quedará pendiente hasta la aprobación de un inspector.</p><div className="modal-actions"><Button variant="secondary" type="button" onClick={() => setShowRequest(false)}>Cancelar</Button><Button type="submit" loading={saving} disabled={overdue}>Enviar solicitud</Button></div></form> : <div className="drawer-unavailable"><p>{technician ? "Este activo no está disponible para una nueva solicitud." : "Consulta el estado de este activo en el catálogo."}</p><Button variant="secondary" type="button" onClick={() => setShowRequest(false)}>Cerrar detalle</Button></div>}
             </motion.section>
           </motion.div>
         </ModalPortal>
@@ -360,7 +440,36 @@ export function LoansPage() {
           <div className="modal-backdrop" role="presentation">
             <section ref={returnDialogRef} tabIndex={-1} className="work-modal" role="dialog" aria-modal="true" aria-labelledby="return-title">
               <div className="modal-heading"><div><p className="work-eyebrow">DEVOLUCIÓN FÍSICA</p><h2 id="return-title">{technician ? "Devolver activo" : "Registrar devolución"}</h2></div><button className="table-action" type="button" aria-label="Cerrar" onClick={() => setReturning(null)}><X size={17} /></button></div>
-              <form className="work-form" onSubmit={returnLoan}><p className="form-hint copy-value">Activo <span className="telemetry-value">{returning.asset.serialNumber}</span><CopyButton text={returning.asset.serialNumber} label={`Copiar serie ${returning.asset.serialNumber}`} /> · vencía el <span className="telemetry-value">{returning.dueLocalDate ?? "sin fecha"}</span></p><FormField label="Condición al devolver"><SelectInput value={condition} onChange={(event) => setCondition(event.target.value as typeof condition)}><option value="GOOD">En buen estado</option><option value="DAMAGED">Dañado</option><option value="LOST">No localizado</option></SelectInput></FormField>{condition === "DAMAGED" && <FormField label="Descripción de la falla (obligatorio)"><textarea className="work-input work-textarea" value={damageDescription} onChange={(event) => setDamageDescription(event.target.value)} placeholder="Describe detalladamente el daño físico o avería del activo..." rows={3} minLength={10} required /><small className={`character-counter ${damageDescription.trim().length >= 10 ? "met" : ""}`}>{damageDescription.length} caracteres · Mínimo 10</small></FormField>}<p className="form-hint">{condition === "DAMAGED" ? "Confirmas que el equipo está dañado, pasará a mantenimiento y se abrirá una orden técnica pendiente." : condition === "LOST" ? "Confirmas que el equipo no está localizado y se generará el reporte formal de pérdida." : "El equipo quedará disponible al registrar su devolución."}</p><div className="modal-actions"><Button variant="secondary" type="button" onClick={() => setReturning(null)}>Cancelar</Button><Button type="submit" loading={saving}>{condition === "DAMAGED" ? "Confirmar devolución con daño" : condition === "LOST" ? "Confirmar activo no localizado" : "Registrar devolución"}</Button></div></form>
+              <form className="work-form" onSubmit={returnLoan}>
+                <p className="form-hint copy-value">Activo <span className="telemetry-value">{returning.asset.serialNumber}</span><CopyButton text={returning.asset.serialNumber} label={`Copiar serie ${returning.asset.serialNumber}`} /> · vencía el <span className="telemetry-value">{returning.dueLocalDate ?? "sin fecha"}</span></p>
+                <FormField label="Condición al devolver">
+                  <SelectInput value={condition} onChange={(event) => setCondition(event.target.value as typeof condition)}>
+                    <option value="GOOD">En buen estado</option>
+                    <option value="DAMAGED">Dañado</option>
+                    <option value="LOST">No localizado</option>
+                  </SelectInput>
+                </FormField>
+                {(condition === "DAMAGED" || condition === "LOST") && (
+                  <div className="traceability-info-banner" style={{ background: "var(--surface-muted, #f8fafc)", border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "6px", padding: "0.75rem", fontSize: "0.8125rem", lineHeight: "1.4" }}>
+                    <span style={{ fontWeight: 600, display: "block", marginBottom: "0.25rem", color: "var(--text-primary, #0f172a)" }}>
+                      Trazabilidad de responsabilidad:
+                    </span>
+                    {returning.user ? (
+                      <p style={{ margin: 0, color: "var(--text-secondary, #475569)" }}>
+                        Responsable identificado automáticamente: <strong>{returning.user.fullName || returning.user.email}</strong> ({returning.user.email}) · Préstamo #{returning.id}
+                      </p>
+                    ) : (
+                      <p style={{ margin: 0, color: "var(--text-secondary, #475569)" }}>
+                        Sin préstamo previo registrado: la novedad quedará asignada al usuario operativo que registra el reporte.
+                      </p>
+                    )}
+                  </div>
+                )}
+                {condition === "DAMAGED" && <FormField label="Descripción de la falla (obligatorio)"><textarea className="work-input work-textarea" value={damageDescription} onChange={(event) => setDamageDescription(event.target.value)} placeholder="Describe detalladamente el daño físico o avería del activo..." rows={3} minLength={10} required /><small className={`character-counter ${damageDescription.trim().length >= 10 ? "met" : ""}`}>{damageDescription.length} caracteres · Mínimo 10</small></FormField>}
+                {condition === "LOST" && <FormField label="Observaciones sobre la pérdida (opcional)"><textarea className="work-input work-textarea" value={damageDescription} onChange={(event) => setDamageDescription(event.target.value)} placeholder="Indica detalles del extravío, último lugar visto o circunstancias..." rows={2} /></FormField>}
+                <p className="form-hint">{condition === "DAMAGED" ? "Confirmas que el equipo está dañado, pasará a mantenimiento y se abrirá una orden técnica vinculada al custodio." : condition === "LOST" ? "Confirmas que el equipo no está localizado y se generará el reporte formal de pérdida con imputación al custodio." : "El equipo quedará disponible al registrar su devolución."}</p>
+                <div className="modal-actions"><Button variant="secondary" type="button" onClick={() => setReturning(null)}>Cancelar</Button><Button type="submit" loading={saving}>{condition === "DAMAGED" ? "Confirmar devolución con daño" : condition === "LOST" ? "Confirmar activo no localizado" : "Registrar devolución"}</Button></div>
+              </form>
             </section>
           </div>
         </ModalPortal>

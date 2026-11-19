@@ -3,7 +3,9 @@ package com.globalnet.assetguard.application.usecase;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -57,10 +59,11 @@ class LoanUseCaseTest {
 
     @BeforeEach
     void setUp() {
-        technician = User.builder().id(10L).role("TECHNICIAN").status(true).build();
-        inspector = User.builder().id(20L).role("INSPECTOR").status(true).build();
-        admin = User.builder().id(30L).role("ADMIN").status(true).build();
-        availableAsset = Asset.builder().id(30L).status("AVAILABLE").build();
+        technician = User.builder().id(10L).fullName("Tech User").email("tech@globalnet.com").role("TECHNICIAN").status(true).build();
+        inspector = User.builder().id(20L).fullName("Inspector User").email("inspector@globalnet.com").role("INSPECTOR").status(true).build();
+        admin = User.builder().id(30L).fullName("Admin User").email("admin@globalnet.com").role("ADMIN").status(true).build();
+        availableAsset = Asset.builder().id(30L).status("AVAILABLE").stockQuantity(1).availableQuantity(1).build();
+        org.mockito.Mockito.lenient().when(assetRepositoryPort.calculateAvailableQuantity(any())).thenReturn(1);
     }
 
     @Test
@@ -129,6 +132,7 @@ class LoanUseCaseTest {
                 .build();
         when(loanRepositoryPort.findById(40L)).thenReturn(Optional.of(approvedLoan));
         when(assetRepositoryPort.findById(30L)).thenReturn(Optional.of(availableAsset));
+        when(assetRepositoryPort.calculateAvailableQuantity(30L)).thenReturn(0);
         when(assetRepositoryPort.save(any(Asset.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(loanRepositoryPort.save(any(Loan.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(maintenanceRecordRepositoryPort.save(any(MaintenanceRecord.class)))
@@ -159,6 +163,7 @@ class LoanUseCaseTest {
         when(userRepositoryPort.findById(30L)).thenReturn(Optional.of(admin));
         when(loanRepositoryPort.findById(40L)).thenReturn(Optional.of(approvedLoan));
         when(assetRepositoryPort.findById(30L)).thenReturn(Optional.of(availableAsset));
+        when(assetRepositoryPort.calculateAvailableQuantity(30L)).thenReturn(0);
         when(assetRepositoryPort.save(any(Asset.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(loanRepositoryPort.save(any(Loan.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -176,10 +181,12 @@ class LoanUseCaseTest {
                 .id(40L)
                 .status(Loan.Status.APPROVED)
                 .asset(Asset.builder().id(30L).build())
+                .user(technician)
                 .build();
         when(userRepositoryPort.findById(30L)).thenReturn(Optional.of(admin));
         when(loanRepositoryPort.findById(40L)).thenReturn(Optional.of(approvedLoan));
         when(assetRepositoryPort.findById(30L)).thenReturn(Optional.of(availableAsset));
+        when(assetRepositoryPort.calculateAvailableQuantity(30L)).thenReturn(0);
         when(assetRepositoryPort.save(any(Asset.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(loanRepositoryPort.save(any(Loan.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(maintenanceRecordRepositoryPort.save(any(MaintenanceRecord.class)))
@@ -189,7 +196,9 @@ class LoanUseCaseTest {
 
         ArgumentCaptor<MaintenanceRecord> captor = ArgumentCaptor.forClass(MaintenanceRecord.class);
         verify(maintenanceRecordRepositoryPort).save(captor.capture());
-        assertEquals("Pantalla rota por impacto", captor.getValue().getReason());
+        assertTrue(captor.getValue().getReason().contains("Pantalla rota por impacto"));
+        assertTrue(captor.getValue().getReason().contains("Tech User"));
+        assertTrue(captor.getValue().getReason().contains("Admin User"));
         assertNull(captor.getValue().getCost());
     }
 
@@ -204,12 +213,13 @@ class LoanUseCaseTest {
         when(userRepositoryPort.findById(30L)).thenReturn(Optional.of(admin));
         when(loanRepositoryPort.findById(40L)).thenReturn(Optional.of(approvedLoan));
         when(assetRepositoryPort.findById(30L)).thenReturn(Optional.of(availableAsset));
+        when(assetRepositoryPort.calculateAvailableQuantity(30L)).thenReturn(0);
         when(assetRepositoryPort.save(any(Asset.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(loanRepositoryPort.save(any(Loan.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         loanUseCase.returnAssetAsAdmin(40L, Loan.ReturnCondition.LOST, 30L, "Equipo extraviado en ruta");
 
-        verify(lostAssetReportUseCase).reportLost(eq(30L), eq(40L), any(), eq("Equipo extraviado en ruta"));
+        verify(lostAssetReportUseCase).reportLost(eq(30L), eq(40L), eq(10L), contains("Equipo extraviado en ruta"));
     }
 
     @Test
@@ -234,6 +244,34 @@ class LoanUseCaseTest {
         LocalDate sameDay = LocalDate.now().plusDays(1);
         assertThrows(IllegalArgumentException.class,
                 () -> loanUseCase.requestLoan(10L, 30L, sameDay, sameDay, "10:00", "10:30"));
+    }
+
+    @Test
+    void approveLoanKeepsAssetAvailableWhenMultipleUnitsRemain() {
+        Loan pendingLoan = pendingLoan();
+        Asset multiUnitAsset = Asset.builder().id(30L).status("AVAILABLE").stockQuantity(5).availableQuantity(5).build();
+        when(userRepositoryPort.findById(20L)).thenReturn(Optional.of(inspector));
+        when(loanRepositoryPort.findById(40L)).thenReturn(Optional.of(pendingLoan));
+        when(assetRepositoryPort.findById(30L)).thenReturn(Optional.of(multiUnitAsset));
+        when(assetRepositoryPort.calculateAvailableQuantity(30L)).thenReturn(5);
+        when(assetRepositoryPort.save(any(Asset.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(loanRepositoryPort.save(any(Loan.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Loan result = loanUseCase.approveLoan(40L, 20L);
+
+        assertEquals(Loan.Status.APPROVED, result.getStatus());
+        assertEquals("AVAILABLE", multiUnitAsset.getStatus());
+    }
+
+    @Test
+    void requestLoanFailsWhenNoUnitsAvailable() {
+        when(userRepositoryPort.findById(10L)).thenReturn(Optional.of(technician));
+        when(loanRepositoryPort.hasOverdueApprovedLoan(eq(10L), any(LocalDate.class))).thenReturn(false);
+        when(assetRepositoryPort.findById(30L)).thenReturn(Optional.of(availableAsset));
+        when(assetRepositoryPort.calculateAvailableQuantity(30L)).thenReturn(0);
+
+        assertThrows(IllegalStateException.class,
+                () -> loanUseCase.requestLoan(10L, 30L, LocalDate.now().plusDays(7)));
     }
 
     private Loan pendingLoan() {

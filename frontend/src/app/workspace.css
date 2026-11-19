@@ -97,8 +97,8 @@
 .page-number-button.active { border-color: #047857; background: #047857; color: #fff; font-weight: 700; }
 .page-number-button:disabled { opacity: .42; cursor: not-allowed; }
 .loans-page-layout { display: flex; flex-direction: column; }
-.loans-page-layout > .loan-catalog-section { order: 1; }
-.loans-page-layout > .work-section { order: 2; }
+.loans-page-layout > .work-section { order: 1; }
+.loans-page-layout > .loan-catalog-section { order: 2; }
 .loan-history-toolbar .toolbar-title { flex-wrap: wrap; }
 .pending-count { min-width: 0 !important; height: auto !important; padding: 4px 8px !important; border: 1px solid #fde68a !important; border-radius: 999px !important; background: #fffbeb !important; color: #92400e !important; font-size: 10px !important; }
 .loans-collapse-trigger { display: inline-flex; min-height: 32px; align-items: center; gap: 7px; padding: 0 10px; border: 1px solid #cbd5e1; border-radius: 7px; background: #fff; color: #334155; font-size: 11px; font-weight: 650; cursor: pointer; }
@@ -379,15 +379,46 @@ html:not(.dark) .workspace-main { background-color: #f1f5f4; }
 .dashboard-inventory > .section-toolbar { border-bottom-color: #e2e8f0; }
 .inventory-kpi-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 0; padding: 14px; }
 .inventory-kpi-grid .insight-card { min-height: 132px; }
-.model-availability { display: grid; grid-template-columns: minmax(180px, .7fr) minmax(0, 1.3fr); gap: 22px; padding: 18px; border-top: 1px solid #e2e8f0; }
-.model-availability > div p { margin: 7px 0 0; color: #64748b; font-size: 10px; line-height: 1.5; }
-.model-availability ul { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
-.model-availability li { display: grid; grid-template-columns: minmax(100px, 1fr) minmax(70px, 1.4fr) auto; align-items: center; gap: 10px; color: #475569; font-size: 10px; }
-.model-availability-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.model-availability-track { height: 6px; overflow: hidden; border-radius: 99px; background: #e2e8f0; }
+.model-availability { display: flex; flex-direction: column; gap: 16px; padding: 18px; border-top: 1px solid #e2e8f0; }
+.model-availability-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.model-availability-intro p { margin: 4px 0 0; color: #64748b; font-size: 11px; line-height: 1.5; }
+.model-availability-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.model-availability-controls .search-control { width: 220px; }
+.model-availability-controls .filter-select { font-size: 11px; height: 32px; padding: 0 8px; }
+.model-availability ul { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.model-availability-row { display: grid; grid-template-columns: minmax(140px, 1fr) minmax(90px, 1.4fr) auto; align-items: center; gap: 14px; width: 100%; padding: 8px 12px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: #475569; font-size: 11px; text-align: left; cursor: pointer; transition: all 150ms ease; }
+.model-availability-row:hover { background: #f1f5f9; border-color: #cbd5e1; }
+.model-availability-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; color: #1e293b; }
+.model-availability-track { height: 7px; overflow: hidden; border-radius: 99px; background: #e2e8f0; }
 .model-availability-track i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #10b981, #38bdf8); }
-.model-availability-count { color: #0f766e; font-size: 9px; }
-.model-availability-empty { color: #64748b; font-size: 10px; }
+.model-availability-count { color: #0f766e; font-size: 11px; font-weight: 600; }
+.model-availability-empty { color: #64748b; font-size: 11px; padding: 12px 0; }
+
+/* Modal Dar de baja definitiva */
+.decommission-summary { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 0.75rem; display: flex; flex-direction: column; gap: 0.35rem; font-size: 0.875rem; color: #0f172a; }
+.decommission-summary strong { color: #475569; margin-right: 0.25rem; }
+.decommission-summary span, .decommission-summary div { color: #0f172a; }
+
+.decommission-alert { background: #fef2f2; border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 6px; padding: 0.75rem; font-size: 0.8125rem; color: #991b1b; }
+.decommission-alert p { margin: 0; font-weight: 500; color: inherit; }
+.decommission-alert strong { color: #7f1d1d; }
+
+/* Auxiliar registro de proveedor */
+.provider-quick-register { margin-top: 0.5rem; padding: 0.5rem; border: 1px dashed #cbd5e1; border-radius: 6px; display: flex; flex-direction: column; gap: 0.5rem; background: #f8fafc; }
+.provider-quick-register-title { font-size: 0.75rem; font-weight: 600; color: #334155; }
+
+/* Desglose de flota por modelo en modal */
+.model-breakdown-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 16px; }
+.model-breakdown-kpi { border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; }
+.model-breakdown-kpi strong { font-size: 18px; font-weight: 700; }
+.model-breakdown-kpi span { font-size: 10px; text-transform: uppercase; font-weight: 600; }
+.model-breakdown-kpi.available { background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; }
+.model-breakdown-kpi.loaned { background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; }
+.model-breakdown-kpi.maintenance { background: #fffbeb; border: 1px solid #fde68a; color: #92400e; }
+.model-breakdown-kpi.lost { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; }
+.model-breakdown-serials { max-height: 240px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px; }
+.model-breakdown-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid #f1f5f9; font-size: 12px; }
+.model-breakdown-row:last-child { border-bottom: none; }
 .insight-card {
   display: flex; min-width: 0; min-height: 145px; flex-direction: column; align-items: flex-start; gap: 10px;
   padding: 16px; border: 1px solid rgb(226 232 240 / 85%); border-radius: 10px; background: rgb(255 255 255 / 84%);
@@ -417,10 +448,10 @@ html:not(.dark) .workspace-main { background-color: #f1f5f4; }
 .asset-card-copy small { color: #64748b; font-size: 9px; }
 .asset-drawer-backdrop { justify-items: end; padding: 0; }
 .asset-drawer { width: min(520px, 100%); height: 100%; max-height: 100%; padding: 26px; border-radius: 16px 0 0 16px; }
-.drawer-asset-summary { display: flex; align-items: center; gap: 10px; margin: 0 0 22px; padding: 12px; border: 1px solid rgb(148 163 184 / 20%); border-radius: 10px; background: rgb(30 41 59 / 54%); }
-.drawer-asset-photo { display: grid; width: 70px; height: 64px; flex: 0 0 auto; place-items: center; border-radius: 7px; background: rgb(148 163 184 / 12%); color: #94a3b8; }
-.drawer-asset-summary > strong { color: #e2e8f0; font-size: 10px; }
-.drawer-asset-summary > span:last-child { font-size: 10px; }
+.drawer-asset-summary { display: flex; align-items: center; gap: 12px; margin: 0 0 22px; padding: 14px; border: 1px solid #e2e8f0; border-radius: 12px; background: #f8fafc; }
+.drawer-asset-photo { display: grid; width: 70px; height: 64px; flex: 0 0 auto; place-items: center; border-radius: 8px; background: #ecfdf5; color: #047857; }
+.drawer-asset-summary > strong { color: #0f172a; font-size: 11px; }
+.drawer-asset-summary > span:last-child { color: #334155; font-size: 11px; }
 .drawer-unavailable { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; font-size: 12px; }
 
 html.dark .insight-card { border-color: #334155; background: rgb(30 41 59 / 82%); }
@@ -433,8 +464,33 @@ html.dark .model-availability { border-color: #334155; }
 html.dark .model-availability li { color: #cbd5e1; }
 html.dark .model-availability > div p,
 html.dark .model-availability-empty { color: #94a3b8; }
+html.dark .model-availability-row { color: #cbd5e1; }
+html.dark .model-availability-row:hover { background: rgba(30, 41, 59, 0.7); border-color: #334155; }
+html.dark .model-availability-name { color: #f1f5f9; }
+html.dark .model-availability-track { background: #334155; }
+html.dark .model-availability-count { color: #34d399; }
+html.dark .model-availability-intro p { color: #94a3b8; }
+
+html.dark .decommission-summary { background: rgba(15, 23, 42, 0.85); border-color: #334155; color: #f8fafc; }
+html.dark .decommission-summary strong { color: #94a3b8; }
+html.dark .decommission-summary span, html.dark .decommission-summary div { color: #f8fafc; }
+html.dark .decommission-alert { background: rgba(127, 29, 29, 0.25); border-color: rgba(248, 113, 113, 0.4); color: #fecaca; }
+html.dark .decommission-alert strong { color: #f8fafc; }
+html.dark .provider-quick-register { border-color: #475569; background: rgba(15, 23, 42, 0.6); }
+html.dark .provider-quick-register-title { color: #e2e8f0; }
+
+html.dark .model-breakdown-kpi.available { background: rgba(6, 78, 59, 0.35); border-color: rgba(52, 211, 153, 0.4); color: #a7f3d0; }
+html.dark .model-breakdown-kpi.loaned { background: rgba(30, 58, 138, 0.35); border-color: rgba(96, 165, 250, 0.4); color: #bfdbfe; }
+html.dark .model-breakdown-kpi.maintenance { background: rgba(120, 53, 15, 0.35); border-color: rgba(251, 191, 36, 0.4); color: #fde68a; }
+html.dark .model-breakdown-kpi.lost { background: rgba(127, 29, 29, 0.35); border-color: rgba(248, 113, 113, 0.4); color: #fecaca; }
+html.dark .model-breakdown-serials { border-color: #334155; }
+html.dark .model-breakdown-row { border-bottom-color: #1e293b; color: #e2e8f0; }
 html.dark .loan-asset-card { border-color: #334155; background: #1e293b; }
 html.dark .asset-card-photo { background: radial-gradient(circle at 50% 25%, rgb(148 163 184 / 16%), transparent 58%), linear-gradient(145deg, #1e293b, #0f172a); color: #94a3b8; }
+html.dark .drawer-asset-summary { border-color: rgb(148 163 184 / 20%); background: rgb(30 41 59 / 54%); }
+html.dark .drawer-asset-photo { background: rgb(148 163 184 / 12%); color: #94a3b8; }
+html.dark .drawer-asset-summary > strong { color: #e2e8f0; font-size: 10px; }
+html.dark .drawer-asset-summary > span:last-child { color: #94a3b8; font-size: 10px; }
 
 @media (max-width: 1000px) {
   .audit-filter-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }

@@ -81,7 +81,7 @@ export function HistoryPage() {
         input: {
           loanId: returning.id,
           condition: returnCondition,
-          damageDescription: returnCondition === "DAMAGED" ? damageDescription.trim() : null,
+          damageDescription: (returnCondition === "DAMAGED" || returnCondition === "LOST") && damageDescription.trim() ? damageDescription.trim() : null,
         },
       });
       const result = await queryGraphQL<HistoryResult>(MY_LOAN_HISTORY);
@@ -90,6 +90,10 @@ export function HistoryPage() {
       setDamageDescription("");
       setPage(0);
       setSuccess(`Devolución registrada para ${returning.asset.serialNumber}.`);
+      window.dispatchEvent(new CustomEvent("loans-updated"));
+      if (returnCondition === "LOST") {
+        window.dispatchEvent(new CustomEvent("lost-reports-updated"));
+      }
     } catch (requestError) {
       setError(errorMessage(requestError));
     } finally {
@@ -112,6 +116,22 @@ export function HistoryPage() {
               <option value="GOOD">En buen estado</option><option value="DAMAGED">Dañado</option><option value="LOST">No localizado</option>
             </SelectInput>
           </FormField>
+          {(returnCondition === "DAMAGED" || returnCondition === "LOST") && (
+            <div className="traceability-info-banner" style={{ background: "var(--surface-muted, #f8fafc)", border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "6px", padding: "0.75rem", fontSize: "0.8125rem", lineHeight: "1.4" }}>
+              <span style={{ fontWeight: 600, display: "block", marginBottom: "0.25rem", color: "var(--text-primary, #0f172a)" }}>
+                Trazabilidad de responsabilidad:
+              </span>
+              {returning.user ? (
+                <p style={{ margin: 0, color: "var(--text-secondary, #475569)" }}>
+                  Responsable identificado automáticamente: <strong>{returning.user.fullName || returning.user.email}</strong> ({returning.user.email}) · Préstamo #{returning.id}
+                </p>
+              ) : (
+                <p style={{ margin: 0, color: "var(--text-secondary, #475569)" }}>
+                  Sin préstamo previo registrado: la novedad quedará asignada al usuario operativo que registra el reporte.
+                </p>
+              )}
+            </div>
+          )}
           {returnCondition === "DAMAGED" && (
             <FormField label="Descripción de la falla (obligatorio)">
               <textarea
@@ -128,7 +148,18 @@ export function HistoryPage() {
               </small>
             </FormField>
           )}
-          <p className="form-hint">{returnCondition === "DAMAGED" ? "El activo se marcará para mantenimiento y se abrirá una orden técnica pendiente para el inspector." : returnCondition === "LOST" ? "La devolución se registrará como activo no localizado y se generará un reporte formal." : "El activo quedará disponible al registrar su devolución."}</p>
+          {returnCondition === "LOST" && (
+            <FormField label="Observaciones sobre la pérdida (opcional)">
+              <textarea
+                className="work-input work-textarea"
+                value={damageDescription}
+                onChange={(event) => setDamageDescription(event.target.value)}
+                placeholder="Indica circunstancias del extravío o detalles relevantes..."
+                rows={2}
+              />
+            </FormField>
+          )}
+          <p className="form-hint">{returnCondition === "DAMAGED" ? "El activo se marcará para mantenimiento y se abrirá una orden técnica pendiente vinculada a tu custodia." : returnCondition === "LOST" ? "La devolución se registrará como activo no localizado y se generará un reporte formal vinculado a tu custodia." : "El activo quedará disponible al registrar su devolución."}</p>
           <div className="modal-actions"><Button variant="secondary" type="button" disabled={saving} onClick={() => setReturning(null)}>Cancelar</Button><Button loading={saving} onClick={() => void submitReturn()}>Registrar devolución</Button></div>
         </div>
       </Dialog>}

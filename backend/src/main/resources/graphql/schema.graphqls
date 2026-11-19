@@ -33,6 +33,7 @@ type Mutation {
     createMaintenanceRecord(input: MaintenanceRecordInput!): MaintenanceRecord!
     completeMaintenance(input: CompleteMaintenanceInput!): MaintenanceRecord!
     updateMaintenanceRecord(input: UpdateMaintenanceRecordInput!): MaintenanceRecord!
+    decommissionFromMaintenance(id: ID!, notes: String!): MaintenanceRecord!
     createProvider(name: String!): Provider!
     acknowledgeLostAssetReport(id: ID!): LostAssetReport!
 }
@@ -80,6 +81,7 @@ type Asset {
     status: String!
     purchaseDate: String
     stockQuantity: Int
+    availableQuantity: Int!
 }
 
 type Loan {

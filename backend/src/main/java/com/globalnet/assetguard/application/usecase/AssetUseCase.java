@@ -29,7 +29,10 @@ public class AssetUseCase {
         if (asset == null) {
             throw new IllegalArgumentException("Asset must not be null");
         }
-        if (asset.getStockQuantity() == null) {
+        if (asset.getStockQuantity() == null || asset.getStockQuantity() < 1) {
+            asset.setStockQuantity(1);
+        }
+        if (asset.getStatus() != null && !"AVAILABLE".equalsIgnoreCase(asset.getStatus())) {
             asset.setStockQuantity(1);
         }
         validateEstimatedValue(asset.getEstimatedValue());
@@ -69,7 +72,8 @@ public class AssetUseCase {
         String previousStatus = existing.getStatus();
         existing.setModel(changes.getModel());
         existing.setEstimatedValue(changes.getEstimatedValue());
-        if (changes.getStockQuantity() != null) {
+        // El stock total solo es editable mediante ajuste explícito de inventario cuando el estado es AVAILABLE
+        if ("AVAILABLE".equalsIgnoreCase(changes.getStatus()) && changes.getStockQuantity() != null && changes.getStockQuantity() >= 1) {
             existing.setStockQuantity(changes.getStockQuantity());
         }
         existing.setPurchaseDate(changes.getPurchaseDate());
@@ -96,6 +100,13 @@ public class AssetUseCase {
 
     public List<Asset> findAll() {
         return assetRepositoryPort.findAll();
+    }
+
+    public int getAvailableQuantity(Long assetId) {
+        if (assetId == null) {
+            return 0;
+        }
+        return assetRepositoryPort.calculateAvailableQuantity(assetId);
     }
 
     private String generateSerialNumber(String model) {

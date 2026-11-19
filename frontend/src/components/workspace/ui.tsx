@@ -6,15 +6,26 @@ import { useCurrency } from "@/components/currency-provider";
 import { statusLabel } from "@/lib/localization";
 import { formatCurrency } from "@/lib/utils";
 
-export function useLockBodyScroll(open: boolean) {
+export function useLockBodyScroll(locked: boolean) {
   useEffect(() => {
-    if (!open || typeof document === "undefined") return;
-    const originalOverflow = document.body.style.overflow;
+    if (!locked) {
+      if (!document.querySelector(".modal-backdrop")) {
+        document.body.style.overflow = "";
+        document.documentElement.style.overflow = "";
+      }
+      return;
+    }
+
     document.body.style.overflow = "hidden";
     return () => {
-      document.body.style.overflow = originalOverflow;
+      requestAnimationFrame(() => {
+        if (!document.querySelector(".modal-backdrop")) {
+          document.body.style.overflow = "";
+          document.documentElement.style.overflow = "";
+        }
+      });
     };
-  }, [open]);
+  }, [locked]);
 }
 
 export function ModalPortal({ children }: { children: ReactNode }) {

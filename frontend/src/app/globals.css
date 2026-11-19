@@ -1366,12 +1366,29 @@ html:not(.dark) .workspace .work-modal .search-control input { color: #0f172a; }
 html:not(.dark) .workspace .work-modal .work-input::placeholder,
 html:not(.dark) .workspace .work-modal .search-control input::placeholder { color: #64748b; }
 html:not(.dark) .workspace .work-modal .modal-actions { border-color: #e2e8f0; }
+html:not(.dark) .drawer-asset-summary,
+html:not(.dark) .work-modal .drawer-asset-summary,
 html:not(.dark) .workspace .work-modal .drawer-asset-summary {
   border-color: #e2e8f0;
+  border-radius: 12px;
   background: #f8fafc;
 }
-html:not(.dark) .workspace .work-modal .drawer-asset-photo { background: #e2e8f0; color: #475569; }
-html:not(.dark) .workspace .work-modal .drawer-asset-summary > strong { color: #0f172a; }
+html:not(.dark) .drawer-asset-photo,
+html:not(.dark) .work-modal .drawer-asset-photo,
+html:not(.dark) .workspace .work-modal .drawer-asset-photo {
+  background: #ecfdf5;
+  color: #047857;
+}
+html:not(.dark) .drawer-asset-summary > strong,
+html:not(.dark) .work-modal .drawer-asset-summary > strong,
+html:not(.dark) .workspace .work-modal .drawer-asset-summary > strong {
+  color: #0f172a;
+}
+html:not(.dark) .drawer-asset-summary > span:last-child,
+html:not(.dark) .work-modal .drawer-asset-summary > span:last-child,
+html:not(.dark) .workspace .work-modal .drawer-asset-summary > span:last-child {
+  color: #334155;
+}
 
 html.dark .workspace .topbar {
   border-bottom-color: #334155;
@@ -1419,9 +1436,28 @@ html.dark .workspace .work-modal .search-control {
 
 html.dark .workspace .work-modal .search-control input { color: #f1f5f9; }
 html.dark .workspace .work-modal .modal-actions { border-color: #334155; }
-html.dark .workspace .work-modal .drawer-asset-summary { border-color: #334155; background: #1e293b; }
-html.dark .workspace .work-modal .drawer-asset-photo { background: #0f172a; color: #94a3b8; }
-html.dark .workspace .work-modal .drawer-asset-summary > strong { color: #f1f5f9; }
+html.dark .drawer-asset-summary,
+html.dark .work-modal .drawer-asset-summary,
+html.dark .workspace .work-modal .drawer-asset-summary {
+  border-color: rgb(148 163 184 / 20%);
+  background: rgb(30 41 59 / 54%);
+}
+html.dark .drawer-asset-photo,
+html.dark .work-modal .drawer-asset-photo,
+html.dark .workspace .work-modal .drawer-asset-photo {
+  background: rgb(148 163 184 / 12%);
+  color: #94a3b8;
+}
+html.dark .drawer-asset-summary > strong,
+html.dark .work-modal .drawer-asset-summary > strong,
+html.dark .workspace .work-modal .drawer-asset-summary > strong {
+  color: #e2e8f0;
+}
+html.dark .drawer-asset-summary > span:last-child,
+html.dark .work-modal .drawer-asset-summary > span:last-child,
+html.dark .workspace .work-modal .drawer-asset-summary > span:last-child {
+  color: #94a3b8;
+}
 
 html.dark .workspace .currency-display.primary-usd .currency-primary { color: #f8fafc; }
 html.dark .workspace .currency-display.primary-cop .currency-primary { color: #5eead4; }

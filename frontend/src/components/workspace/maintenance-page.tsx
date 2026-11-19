@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { CheckCircle2, Pencil, Plus, Search, Wrench, X } from "lucide-react";
+import { Ban, CheckCircle2, ChevronDown, Pencil, Plus, Search, Wrench, X } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import { useCurrency, type Currency } from "@/components/currency-provider";
 import { Combobox } from "@/components/workspace/combobox";
 import { Button, CopyButton, CurrencyDisplay, DataTable, EmptyState, Feedback, FormField, LoadingRows, ModalPortal, PageTitle, PaginationControls, SelectInput, StatusTag, TextInput, useEscapeKey, useModalFocus } from "@/components/workspace/ui";
-import { ASSETS_CATALOG_QUERY, COMPLETE_MAINTENANCE, CREATE_MAINTENANCE, CREATE_PROVIDER, MAINTENANCE_QUERY, PROVIDERS_QUERY, UPDATE_MAINTENANCE } from "@/lib/operations";
+import { ASSETS_CATALOG_QUERY, COMPLETE_MAINTENANCE, CREATE_MAINTENANCE, CREATE_PROVIDER, DECOMMISSION_FROM_MAINTENANCE, MAINTENANCE_QUERY, PROVIDERS_QUERY, UPDATE_MAINTENANCE } from "@/lib/operations";
 import { errorMessage, queryGraphQL, type AssetItem, type MaintenanceItem, type ProviderItem } from "@/lib/workspace";
 
 type MaintenanceResult = { maintenanceRecords: MaintenanceItem[] };
@@ -49,6 +49,10 @@ export function MaintenancePage() {
   const [feedback, setFeedback] = useState<{ error?: string; success?: string }>({});
   const [completing, setCompleting] = useState<MaintenanceItem | null>(null);
 
+  // Modal Baja Definitiva
+  const [decommissioning, setDecommissioning] = useState<MaintenanceItem | null>(null);
+  const [decommissionNotes, setDecommissionNotes] = useState("");
+
   // Filtros y ordenamiento - Equipos en mantenimiento
   const [activeSearch, setActiveSearch] = useState("");
   const [activeProviderFilter, setActiveProviderFilter] = useState("ALL");
@@ -63,15 +67,18 @@ export function MaintenancePage() {
   const [historySortBy, setHistorySortBy] = useState("START_DATE_DESC");
   const [historyPage, setHistoryPage] = useState(0);
   const [historyPageSize, setHistoryPageSize] = useState(10);
+  const [historyExpanded, setHistoryExpanded] = useState(false);
 
-  useEscapeKey(!saving && (formOpen || completing !== null || editingRecord !== null), () => {
-    if (completing) setCompleting(null);
+  useEscapeKey(!saving && (formOpen || completing !== null || editingRecord !== null || decommissioning !== null), () => {
+    if (decommissioning) setDecommissioning(null);
+    else if (completing) setCompleting(null);
     else if (editingRecord) setEditingRecord(null);
     else setFormOpen(false);
   });
   const formDialogRef = useModalFocus(formOpen);
   const editDialogRef = useModalFocus(editingRecord !== null);
   const completionDialogRef = useModalFocus(completing !== null);
+  const decommissionDialogRef = useModalFocus(decommissioning !== null);
 
   useEffect(() => {
     let active = true;
@@ -155,11 +162,16 @@ export function MaintenancePage() {
 
   const visibleActiveRecords = sortedActiveRecords.slice(activePage * activePageSize, (activePage + 1) * activePageSize);
   const visibleHistoryRecords = sortedHistoryRecords.slice(historyPage * historyPageSize, (historyPage + 1) * historyPageSize);
-  const availableAssets = assets.filter((asset) => asset.status !== "LOST" && asset.status !== "UNDER_MAINTENANCE");
-  const assetOptions = availableAssets.map((asset) => ({
-    value: asset.id,
-    label: `${asset.serialNumber} · ${asset.model ?? "Activo"}`,
-  }));
+  const availableAssets = assets.filter((asset) => (asset.availableQuantity ?? 0) > 0);
+  const assetOptions = availableAssets.map((asset) => {
+    const total = asset.stockQuantity ?? 1;
+    const avail = asset.availableQuantity ?? 0;
+    const label = `${avail} / ${total} ${avail === 1 ? "disponible" : "disponibles"}`;
+    return {
+      value: asset.id,
+      label: `${asset.serialNumber} · ${asset.model ?? "Activo"} (${label})`,
+    };
+  });
   const selectedAsset = availableAssets.find((asset) => asset.id === assetId);
 
   const providerOptions = useMemo(() => {
@@ -328,6 +340,38 @@ export function MaintenancePage() {
     finally { setSaving(false); }
   }
 
+  function startDecommission(record: MaintenanceItem) {
+    setDecommissioning(record);
+    setDecommissionNotes("");
+  }
+
+  async function handleDecommission(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!decommissioning) return;
+    if (decommissionNotes.trim().length < 10) {
+      setFeedback({ error: "El diagnóstico técnico debe tener al menos 10 caracteres." });
+      return;
+    }
+    setSaving(true);
+    setFeedback({});
+    try {
+      await queryGraphQL<{ decommissionFromMaintenance: MaintenanceItem }>(DECOMMISSION_FROM_MAINTENANCE, {
+        id: decommissioning.id,
+        notes: decommissionNotes.trim(),
+      });
+      setActivePage(0);
+      setHistoryPage(0);
+      setFeedback({ success: `${decommissioning.asset.serialNumber} dado de baja definitiva e imputado a mermas permanentes.` });
+      setDecommissioning(null);
+      setDecommissionNotes("");
+      setRefresh((previous) => previous + 1);
+    } catch (error) {
+      setFeedback({ error: errorMessage(error) });
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <div className="work-page">
       <PageTitle eyebrow="OPERACIONES · INSPECCIÓN" title="Mantenimiento técnico" description="Registra intervenciones y certifica el retorno de equipos al inventario disponible." action={<Button onClick={() => { setCostCurrency(currency); setShowNewProviderNewModal(false); setFormOpen(true); }}><Plus size={16} /> Enviar a mantenimiento</Button>} />
@@ -353,7 +397,7 @@ export function MaintenancePage() {
             </SelectInput>
           </div>
         </div>
-        {loading ? <LoadingRows label="Cargando registros" /> : sortedActiveRecords.length === 0 ? <EmptyState title="No hay equipos en intervención" detail="Los equipos enviados a mantenimiento aparecerán en esta bandeja." /> : <DataTable headings={["Activo", "Motivo", "Proveedor", "Inicio", "Costo", "Estado", "Acción"]}>{visibleActiveRecords.map((record) => <tr key={record.id}><td><span className="copy-value"><span className="table-primary mono-cell telemetry-value font-mono">{record.asset.serialNumber}</span><CopyButton text={record.asset.serialNumber} label={`Copiar serie ${record.asset.serialNumber}`} /></span><small className="table-secondary">{record.asset.model}</small><small className="table-secondary id-copy-line font-mono">ID <span>{record.id}</span><CopyButton className="inline-copy" text={record.id} label={`Copiar ID del mantenimiento de ${record.asset.serialNumber}`} /></small></td><td>{record.reason || "—"}</td><td>{record.providerName || "—"}</td><td className="telemetry-value font-mono">{record.startDate || "—"}</td><td>{record.cost == null ? "—" : <CurrencyDisplay usdAmount={record.cost} />}</td><td><StatusTag value={record.asset.status} /></td><td><div className="inline-actions"><button className="table-action" type="button" title={`Editar intervención de ${record.asset.serialNumber}`} aria-label={`Editar intervención de ${record.asset.serialNumber}`} onClick={() => startEdit(record)}><Pencil size={15} /></button><button className="table-action" type="button" title={`Certificar retorno de ${record.asset.serialNumber}`} aria-label={`Certificar retorno de ${record.asset.serialNumber}`} onClick={() => setCompleting(record)}><CheckCircle2 size={15} /></button></div></td></tr>)}</DataTable>}
+        {loading ? <LoadingRows label="Cargando registros" /> : sortedActiveRecords.length === 0 ? <EmptyState title="No hay equipos en intervención" detail="Los equipos enviados a mantenimiento aparecerán en esta bandeja." /> : <DataTable headings={["Activo", "Motivo", "Proveedor", "Inicio", "Costo", "Estado", "Acción"]}>{visibleActiveRecords.map((record) => <tr key={record.id}><td><span className="copy-value"><span className="table-primary mono-cell telemetry-value font-mono">{record.asset.serialNumber}</span><CopyButton text={record.asset.serialNumber} label={`Copiar serie ${record.asset.serialNumber}`} /></span><small className="table-secondary">{record.asset.model}</small><small className="table-secondary id-copy-line font-mono">ID <span>{record.id}</span><CopyButton className="inline-copy" text={record.id} label={`Copiar ID del mantenimiento de ${record.asset.serialNumber}`} /></small></td><td>{record.reason || "—"}</td><td>{record.providerName || "—"}</td><td className="telemetry-value font-mono">{record.startDate || "—"}</td><td>{record.cost == null ? "—" : <CurrencyDisplay usdAmount={record.cost} />}</td><td><StatusTag value={record.asset.status} /></td><td><div className="inline-actions"><button className="table-action" type="button" title={`Editar intervención de ${record.asset.serialNumber}`} aria-label={`Editar intervención de ${record.asset.serialNumber}`} onClick={() => startEdit(record)}><Pencil size={15} /></button><button className="table-action" type="button" title={`Certificar retorno de ${record.asset.serialNumber}`} aria-label={`Certificar retorno de ${record.asset.serialNumber}`} onClick={() => setCompleting(record)}><CheckCircle2 size={15} /></button><button className="table-action table-action-danger" type="button" title={`Dar de baja definitiva ${record.asset.serialNumber}`} aria-label={`Dar de baja definitiva ${record.asset.serialNumber}`} onClick={() => startDecommission(record)}><Ban size={15} /></button></div></td></tr>)}</DataTable>}
         <PaginationControls currentPage={activePage} totalItems={sortedActiveRecords.length} pageSize={activePageSize} onPageChange={setActivePage} onPageSizeChange={(size) => { setActivePageSize(size); setActivePage(0); }} loading={loading} itemLabel="intervenciones activas" />
       </section>
       <section className="work-section secondary-section">
@@ -381,23 +425,35 @@ export function MaintenancePage() {
               <option value="COST_ASC">Costo (Menor)</option>
               <option value="PROVIDER_ASC">Proveedor (A-Z)</option>
             </SelectInput>
+            <button
+              type="button"
+              className="loans-collapse-trigger"
+              aria-expanded={historyExpanded}
+              aria-controls="maintenance-history-panel"
+              onClick={() => setHistoryExpanded((expanded) => !expanded)}
+            >
+              <span>{historyExpanded ? "Contraer" : "Expandir"}</span>
+              <ChevronDown size={16} aria-hidden="true" />
+            </button>
           </div>
         </div>
-        {loading ? <LoadingRows label="Cargando historial" /> : sortedHistoryRecords.length === 0 ? <EmptyState title="Sin intervenciones registradas" detail="Cuando se inicie una intervención, aparecerá aquí su historial." /> : <DataTable headings={["Activo", "Motivo", "Inicio", "Cierre", "Estado actual"]}>{visibleHistoryRecords.map((record) => <tr key={record.id}><td><span className="copy-value"><span className="mono-cell telemetry-value font-mono">{record.asset.serialNumber}</span><CopyButton text={record.asset.serialNumber} label={`Copiar serie ${record.asset.serialNumber}`} /></span><small className="table-secondary id-copy-line font-mono">ID <span>{record.id}</span><CopyButton className="inline-copy" text={record.id} label={`Copiar ID del mantenimiento de ${record.asset.serialNumber}`} /></small></td><td>{record.reason || "—"}</td><td className="telemetry-value font-mono">{record.startDate || "—"}</td><td className="telemetry-value font-mono">{record.endDate || "En curso"}</td><td><StatusTag value={record.asset.status} /></td></tr>)}</DataTable>}
-        <PaginationControls currentPage={historyPage} totalItems={sortedHistoryRecords.length} pageSize={historyPageSize} onPageChange={setHistoryPage} onPageSizeChange={(size) => { setHistoryPageSize(size); setHistoryPage(0); }} loading={loading} itemLabel="intervenciones" />
+        <div id="maintenance-history-panel" hidden={!historyExpanded}>
+          {loading ? <LoadingRows label="Cargando historial" /> : sortedHistoryRecords.length === 0 ? <EmptyState title="Sin intervenciones registradas" detail="Cuando se inicie una intervención, aparecerá aquí su historial." /> : <DataTable headings={["Activo", "Motivo", "Inicio", "Cierre", "Estado actual"]}>{visibleHistoryRecords.map((record) => <tr key={record.id}><td><span className="copy-value"><span className="mono-cell telemetry-value font-mono">{record.asset.serialNumber}</span><CopyButton text={record.asset.serialNumber} label={`Copiar serie ${record.asset.serialNumber}`} /></span><small className="table-secondary id-copy-line font-mono">ID <span>{record.id}</span><CopyButton className="inline-copy" text={record.id} label={`Copiar ID del mantenimiento de ${record.asset.serialNumber}`} /></small></td><td>{record.reason || "—"}</td><td className="telemetry-value font-mono">{record.startDate || "—"}</td><td className="telemetry-value font-mono">{record.endDate || "En curso"}</td><td><StatusTag value={record.asset.status} /></td></tr>)}</DataTable>}
+          <PaginationControls currentPage={historyPage} totalItems={sortedHistoryRecords.length} pageSize={historyPageSize} onPageChange={setHistoryPage} onPageSizeChange={(size) => { setHistoryPageSize(size); setHistoryPage(0); }} loading={loading} itemLabel="intervenciones" />
+        </div>
       </section>
 
       {/* Modal Nueva intervención */}
       {formOpen && (
         <ModalPortal>
-          <div className="modal-backdrop" role="presentation"><section ref={formDialogRef} tabIndex={-1} className="work-modal" role="dialog" aria-modal="true" aria-labelledby="maintenance-title"><div className="modal-heading"><div><p className="work-eyebrow">CONTROL TÉCNICO</p><h2 id="maintenance-title">Nueva intervención</h2></div><button className="table-action" type="button" aria-label="Cerrar" onClick={() => setFormOpen(false)}><X size={17} /></button></div><form className="work-form" onSubmit={createRecord}><div className="work-field"><span>Activo</span><div className="asset-combobox-row"><Combobox value={assetId} onValueChange={setAssetId} options={assetOptions} placeholder="Selecciona un equipo" searchPlaceholder="Buscar por serie o modelo" emptyMessage="No hay equipos disponibles." required />{selectedAsset && <CopyButton text={selectedAsset.serialNumber} label={`Copiar serie ${selectedAsset.serialNumber}`} />}</div></div><FormField label="Motivo de intervención"><TextInput value={reason} onChange={(event) => setReason(event.target.value)} required /></FormField><FormField label="Proveedor técnico"><div className="asset-combobox-row"><Combobox value={providerName} onValueChange={setProviderName} options={providerOptions} placeholder="Selecciona un proveedor técnico" searchPlaceholder="Buscar empresa técnica..." emptyMessage="No se encontraron proveedores." />{providerName && <button type="button" className="table-action" title="Quitar proveedor asignado" aria-label="Quitar proveedor asignado" onClick={() => setProviderName("")}><X size={14} /></button>}</div>{!showNewProviderNewModal ? <div style={{ marginTop: "0.25rem" }}><button type="button" className="form-hint" style={{ background: "none", border: "none", padding: 0, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "0.25rem", textDecoration: "underline" }} onClick={() => { setShowNewProviderNewModal(true); setNewProviderName(""); }}><Plus size={13} /> Añadir nuevo proveedor al catálogo</button></div> : <div style={{ marginTop: "0.5rem", padding: "0.5rem", border: "1px dashed var(--border-color, #cbd5e1)", borderRadius: "6px", display: "flex", flexDirection: "column", gap: "0.5rem" }}><span style={{ fontSize: "0.75rem", fontWeight: 600 }}>Registrar nueva empresa tecnológica:</span><div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}><TextInput placeholder="Nombre de la empresa" value={newProviderName} onChange={(e) => setNewProviderName(e.target.value)} disabled={creatingProvider} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void handleCreateProvider("new"); } }} /><Button type="button" disabled={creatingProvider || !newProviderName.trim()} loading={creatingProvider} onClick={() => void handleCreateProvider("new")}>Guardar</Button><Button type="button" variant="secondary" disabled={creatingProvider} onClick={() => { setShowNewProviderNewModal(false); setNewProviderName(""); }}>Cancelar</Button></div></div>}</FormField><FormField label="Costo estimado"><div className="money-entry"><TextInput className="telemetry-value" type="number" min="0" max={costCurrency === "COP" ? MAX_MAINTENANCE_COST_USD * 4000 : MAX_MAINTENANCE_COST_USD} step="0.01" value={cost} onChange={(event) => setCost(event.target.value)} /><button className="currency-entry-label" type="button" onClick={toggleCostCurrency} aria-label={`Cambiar moneda de entrada, actual ${costCurrency}`}>{costCurrency}</button></div><small className="form-hint">Máximo: {costCurrency === "COP" ? "400.000.000 COP" : "100.000 USD"}.</small></FormField><p className="form-hint">La tasa de referencia es 1 USD = 4.000 COP; el costo se guarda en USD. Al guardar, el equipo quedará marcado como &quot;En mantenimiento&quot;.</p><div className="modal-actions"><Button variant="secondary" type="button" onClick={() => setFormOpen(false)}>Cancelar</Button><Button type="submit" loading={saving}>Iniciar mantenimiento</Button></div></form></section></div>
+          <div className="modal-backdrop" role="presentation"><section ref={formDialogRef} tabIndex={-1} className="work-modal" role="dialog" aria-modal="true" aria-labelledby="maintenance-title"><div className="modal-heading"><div><p className="work-eyebrow">CONTROL TÉCNICO</p><h2 id="maintenance-title">Nueva intervención</h2></div><button className="table-action" type="button" aria-label="Cerrar" onClick={() => setFormOpen(false)}><X size={17} /></button></div><form className="work-form" onSubmit={createRecord}><div className="work-field"><span>Activo</span><div className="asset-combobox-row"><Combobox value={assetId} onValueChange={setAssetId} options={assetOptions} placeholder="Selecciona un equipo" searchPlaceholder="Buscar por serie o modelo" emptyMessage="No hay equipos disponibles." required />{selectedAsset && <CopyButton text={selectedAsset.serialNumber} label={`Copiar serie ${selectedAsset.serialNumber}`} />}</div></div><FormField label="Motivo de intervención"><TextInput value={reason} onChange={(event) => setReason(event.target.value)} required /></FormField><FormField label="Proveedor técnico"><div className="asset-combobox-row"><Combobox value={providerName} onValueChange={setProviderName} options={providerOptions} placeholder="Selecciona un proveedor técnico" searchPlaceholder="Buscar empresa técnica..." emptyMessage="No se encontraron proveedores." />{providerName && <button type="button" className="table-action" title="Quitar proveedor asignado" aria-label="Quitar proveedor asignado" onClick={() => setProviderName("")}><X size={14} /></button>}</div>{!showNewProviderNewModal ? <div style={{ marginTop: "0.25rem" }}><button type="button" className="form-hint" style={{ background: "none", border: "none", padding: 0, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "0.25rem", textDecoration: "underline" }} onClick={() => { setShowNewProviderNewModal(true); setNewProviderName(""); }}><Plus size={13} /> Añadir nuevo proveedor al catálogo</button></div> : <div className="provider-quick-register"><span className="provider-quick-register-title">Registrar nueva empresa tecnológica:</span><div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}><TextInput placeholder="Nombre de la empresa" value={newProviderName} onChange={(e) => setNewProviderName(e.target.value)} disabled={creatingProvider} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void handleCreateProvider("new"); } }} /><Button type="button" disabled={creatingProvider || !newProviderName.trim()} loading={creatingProvider} onClick={() => void handleCreateProvider("new")}>Guardar</Button><Button type="button" variant="secondary" disabled={creatingProvider} onClick={() => { setShowNewProviderNewModal(false); setNewProviderName(""); }}>Cancelar</Button></div></div>}</FormField><FormField label="Costo estimado"><div className="money-entry"><TextInput className="telemetry-value" type="number" min="0" max={costCurrency === "COP" ? MAX_MAINTENANCE_COST_USD * 4000 : MAX_MAINTENANCE_COST_USD} step="0.01" value={cost} onChange={(event) => setCost(event.target.value)} /><button className="currency-entry-label" type="button" onClick={toggleCostCurrency} aria-label={`Cambiar moneda de entrada, actual ${costCurrency}`}>{costCurrency}</button></div><small className="form-hint">Máximo: {costCurrency === "COP" ? "400.000.000 COP" : "100.000 USD"}.</small></FormField><p className="form-hint">La tasa de referencia es 1 USD = 4.000 COP; el costo se guarda en USD. Al guardar, el equipo quedará marcado como &quot;En mantenimiento&quot;.</p><div className="modal-actions"><Button variant="secondary" type="button" onClick={() => setFormOpen(false)}>Cancelar</Button><Button type="submit" loading={saving}>Iniciar mantenimiento</Button></div></form></section></div>
         </ModalPortal>
       )}
 
       {/* Modal Editar intervención */}
       {editingRecord && (
         <ModalPortal>
-          <div className="modal-backdrop" role="presentation"><section ref={editDialogRef} tabIndex={-1} className="work-modal" role="dialog" aria-modal="true" aria-labelledby="edit-maintenance-title"><div className="modal-heading"><div><p className="work-eyebrow">CONTROL TÉCNICO</p><h2 id="edit-maintenance-title">Editar intervención</h2></div><button className="table-action" type="button" aria-label="Cerrar" onClick={() => setEditingRecord(null)}><X size={17} /></button></div><form className="work-form" onSubmit={saveEdit}><div className="work-field"><span>Activo en intervención</span><div className="asset-combobox-row"><TextInput value={`${editingRecord.asset.serialNumber} · ${editingRecord.asset.model ?? "Activo"}`} disabled readOnly /><CopyButton text={editingRecord.asset.serialNumber} label={`Copiar serie ${editingRecord.asset.serialNumber}`} /></div></div><FormField label="Motivo de intervención"><TextInput value={editReason} onChange={(event) => setEditReason(event.target.value)} placeholder="Describe el motivo o falla técnica" required /></FormField><FormField label="Proveedor técnico"><div className="asset-combobox-row"><Combobox value={editProviderName} onValueChange={setEditProviderName} options={editProviderOptions} placeholder="Selecciona un proveedor técnico" searchPlaceholder="Buscar empresa técnica..." emptyMessage="No se encontraron proveedores." />{editProviderName && <button type="button" className="table-action" title="Quitar proveedor asignado" aria-label="Quitar proveedor asignado" onClick={() => setEditProviderName("")}><X size={14} /></button>}</div>{!showNewProviderEditModal ? <div style={{ marginTop: "0.25rem" }}><button type="button" className="form-hint" style={{ background: "none", border: "none", padding: 0, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "0.25rem", textDecoration: "underline" }} onClick={() => { setShowNewProviderEditModal(true); setNewProviderName(""); }}><Plus size={13} /> Añadir nuevo proveedor al catálogo</button></div> : <div style={{ marginTop: "0.5rem", padding: "0.5rem", border: "1px dashed var(--border-color, #cbd5e1)", borderRadius: "6px", display: "flex", flexDirection: "column", gap: "0.5rem" }}><span style={{ fontSize: "0.75rem", fontWeight: 600 }}>Registrar nueva empresa tecnológica:</span><div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}><TextInput placeholder="Nombre de la empresa" value={newProviderName} onChange={(e) => setNewProviderName(e.target.value)} disabled={creatingProvider} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void handleCreateProvider("edit"); } }} /><Button type="button" disabled={creatingProvider || !newProviderName.trim()} loading={creatingProvider} onClick={() => void handleCreateProvider("edit")}>Guardar</Button><Button type="button" variant="secondary" disabled={creatingProvider} onClick={() => { setShowNewProviderEditModal(false); setNewProviderName(""); }}>Cancelar</Button></div></div>}</FormField><FormField label="Costo estimado / total de reparación"><div className="money-entry"><TextInput className="telemetry-value" type="number" min="0" max={editCostCurrency === "COP" ? MAX_MAINTENANCE_COST_USD * 4000 : MAX_MAINTENANCE_COST_USD} step="0.01" value={editCost} onChange={(event) => setEditCost(event.target.value)} placeholder="0.00" /><button className="currency-entry-label" type="button" onClick={toggleEditCostCurrency} aria-label={`Cambiar moneda de entrada, actual ${editCostCurrency}`}>{editCostCurrency}</button></div><small className="form-hint">Máximo: {editCostCurrency === "COP" ? "400.000.000 COP" : "100.000 USD"}.</small></FormField><p className="form-hint">La tasa de referencia es 1 USD = 4.000 COP; el costo se actualiza y consolida en USD.</p><div className="modal-actions"><Button variant="secondary" type="button" onClick={() => setEditingRecord(null)}>Cancelar</Button><Button type="submit" loading={saving}>Guardar cambios</Button></div></form></section></div>
+          <div className="modal-backdrop" role="presentation"><section ref={editDialogRef} tabIndex={-1} className="work-modal" role="dialog" aria-modal="true" aria-labelledby="edit-maintenance-title"><div className="modal-heading"><div><p className="work-eyebrow">CONTROL TÉCNICO</p><h2 id="edit-maintenance-title">Editar intervención</h2></div><button className="table-action" type="button" aria-label="Cerrar" onClick={() => setEditingRecord(null)}><X size={17} /></button></div><form className="work-form" onSubmit={saveEdit}><div className="work-field"><span>Activo en intervención</span><div className="asset-combobox-row"><TextInput value={`${editingRecord.asset.serialNumber} · ${editingRecord.asset.model ?? "Activo"}`} disabled readOnly /><CopyButton text={editingRecord.asset.serialNumber} label={`Copiar serie ${editingRecord.asset.serialNumber}`} /></div></div><FormField label="Motivo de intervención"><TextInput value={editReason} onChange={(event) => setEditReason(event.target.value)} placeholder="Describe el motivo o falla técnica" required /></FormField><FormField label="Proveedor técnico"><div className="asset-combobox-row"><Combobox value={editProviderName} onValueChange={setEditProviderName} options={editProviderOptions} placeholder="Selecciona un proveedor técnico" searchPlaceholder="Buscar empresa técnica..." emptyMessage="No se encontraron proveedores." />{editProviderName && <button type="button" className="table-action" title="Quitar proveedor asignado" aria-label="Quitar proveedor asignado" onClick={() => setEditProviderName("")}><X size={14} /></button>}</div>{!showNewProviderEditModal ? <div style={{ marginTop: "0.25rem" }}><button type="button" className="form-hint" style={{ background: "none", border: "none", padding: 0, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "0.25rem", textDecoration: "underline" }} onClick={() => { setShowNewProviderEditModal(true); setNewProviderName(""); }}><Plus size={13} /> Añadir nuevo proveedor al catálogo</button></div> : <div className="provider-quick-register"><span className="provider-quick-register-title">Registrar nueva empresa tecnológica:</span><div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}><TextInput placeholder="Nombre de la empresa" value={newProviderName} onChange={(e) => setNewProviderName(e.target.value)} disabled={creatingProvider} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void handleCreateProvider("edit"); } }} /><Button type="button" disabled={creatingProvider || !newProviderName.trim()} loading={creatingProvider} onClick={() => void handleCreateProvider("edit")}>Guardar</Button><Button type="button" variant="secondary" disabled={creatingProvider} onClick={() => { setShowNewProviderEditModal(false); setNewProviderName(""); }}>Cancelar</Button></div></div>}</FormField><FormField label="Costo estimado / total de reparación"><div className="money-entry"><TextInput className="telemetry-value" type="number" min="0" max={editCostCurrency === "COP" ? MAX_MAINTENANCE_COST_USD * 4000 : MAX_MAINTENANCE_COST_USD} step="0.01" value={editCost} onChange={(event) => setEditCost(event.target.value)} placeholder="0.00" /><button className="currency-entry-label" type="button" onClick={toggleEditCostCurrency} aria-label={`Cambiar moneda de entrada, actual ${editCostCurrency}`}>{editCostCurrency}</button></div><small className="form-hint">Máximo: {editCostCurrency === "COP" ? "400.000.000 COP" : "100.000 USD"}.</small></FormField><p className="form-hint">La tasa de referencia es 1 USD = 4.000 COP; el costo se actualiza y consolida en USD.</p><div className="modal-actions"><Button variant="secondary" type="button" onClick={() => setEditingRecord(null)}>Cancelar</Button><Button type="submit" loading={saving}>Guardar cambios</Button></div></form></section></div>
         </ModalPortal>
       )}
 
@@ -405,6 +461,58 @@ export function MaintenancePage() {
       {completing && (
         <ModalPortal>
           <div className="modal-backdrop" role="presentation"><section ref={completionDialogRef} tabIndex={-1} className="work-modal" role="alertdialog" aria-modal="true" aria-labelledby="complete-title" aria-describedby="complete-description"><div className="modal-heading"><div><p className="work-eyebrow">CONTROL TÉCNICO</p><h2 id="complete-title">Confirmar certificación de retorno</h2></div><button className="table-action" type="button" title="Cerrar confirmación" aria-label="Cerrar confirmación" onClick={() => setCompleting(null)}><X size={17} /></button></div><p id="complete-description" className="legal-notice-copy">Al certificar el retorno de <span className="copy-value"><span className="telemetry-value">{completing.asset.serialNumber}</span><CopyButton text={completing.asset.serialNumber} label={`Copiar serie ${completing.asset.serialNumber}`} /></span>, el registro de mantenimiento se cerrará y el activo quedará disponible.</p><div className="modal-actions"><Button variant="secondary" type="button" onClick={() => setCompleting(null)}>Cancelar</Button><Button type="button" loading={saving} onClick={() => void complete()}>Certificar retorno</Button></div></section></div>
+        </ModalPortal>
+      )}
+
+      {/* Modal Dar de baja definitiva */}
+      {decommissioning && (
+        <ModalPortal>
+          <div className="modal-backdrop" role="presentation">
+            <section ref={decommissionDialogRef} tabIndex={-1} className="work-modal" role="dialog" aria-modal="true" aria-labelledby="decommission-title">
+              <div className="modal-heading">
+                <div>
+                  <p className="work-eyebrow text-rose-600 dark:text-rose-400">BAJA TÉCNICA DEFINITIVA</p>
+                  <h2 id="decommission-title">Dar de baja definitiva</h2>
+                </div>
+                <button className="table-action" type="button" aria-label="Cerrar" onClick={() => setDecommissioning(null)}><X size={17} /></button>
+              </div>
+              <form className="work-form" onSubmit={handleDecommission}>
+                <div className="decommission-summary">
+                  <div><strong>Serie:</strong> <span className="telemetry-value font-mono">{decommissioning.asset.serialNumber}</span></div>
+                  <div><strong>Modelo:</strong> <span>{decommissioning.asset.model || "—"}</span></div>
+                  <div><strong>Valor estimado:</strong> <span>{decommissioning.asset.estimatedValue != null ? <CurrencyDisplay usdAmount={decommissioning.asset.estimatedValue} /> : "No especificado"}</span></div>
+                </div>
+
+                <div className="decommission-alert">
+                  <p>
+                    ⚠️ <strong>Confirmación de merma permanente:</strong> Esta acción cerrará la orden de mantenimiento y contabilizará permanentemente este equipo como pérdida/merma en el Dashboard financiero. Esta acción no se puede deshacer y la unidad se descontará del inventario disponible.
+                  </p>
+                </div>
+
+                <FormField label="Diagnóstico técnico de daño irreparable (obligatorio)">
+                  <textarea
+                    className="work-input work-textarea"
+                    value={decommissionNotes}
+                    onChange={(e) => setDecommissionNotes(e.target.value)}
+                    placeholder="Describe el daño irreparable, costo inviable de reparación o fallo catastrófico que justifica la baja..."
+                    rows={4}
+                    minLength={10}
+                    required
+                  />
+                  <small className={`character-counter ${decommissionNotes.trim().length >= 10 ? "met" : ""}`}>
+                    {decommissionNotes.trim().length} / 10 caracteres mínimo
+                  </small>
+                </FormField>
+
+                <div className="modal-actions">
+                  <Button variant="secondary" type="button" onClick={() => setDecommissioning(null)}>Cancelar</Button>
+                  <Button variant="danger" type="submit" loading={saving} disabled={decommissionNotes.trim().length < 10}>
+                    Confirmar baja definitiva
+                  </Button>
+                </div>
+              </form>
+            </section>
+          </div>
         </ModalPortal>
       )}
     </div>

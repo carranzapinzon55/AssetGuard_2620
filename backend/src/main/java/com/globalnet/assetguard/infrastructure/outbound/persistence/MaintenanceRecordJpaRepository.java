@@ -18,6 +18,17 @@ public interface MaintenanceRecordJpaRepository extends JpaRepository<Maintenanc
 
     List<MaintenanceRecordEntity> findByAssetId(Long assetId);
 
+    long countByAsset_IdAndEndDateIsNull(Long assetId);
+
+    @Query("""
+        select record.asset.id, count(record.id)
+        from MaintenanceRecordEntity record
+        where record.endDate is null
+          and record.asset is not null
+        group by record.asset.id
+        """)
+    List<Object[]> countOpenMaintenanceByAsset();
+
     @Query(value = """
         select coalesce(sum(record.cost), 0.0)
         from maintenance_records record

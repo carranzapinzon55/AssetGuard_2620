@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { AlertTriangle, Bell, CheckCircle2, Clock, Search, ShieldAlert, UserCheck } from "lucide-react";
+import { AlertTriangle, Bell, CheckCheck, CheckCircle2, Clock, Search, ShieldAlert, UserCheck } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import { Button, Dialog, EmptyState, Feedback, LoadingRows } from "@/components/workspace/ui";
 import { ACKNOWLEDGE_LOST_REPORT, LOST_ASSET_REPORTS_QUERY } from "@/lib/operations";
@@ -28,33 +28,96 @@ export function useLostReports() {
 
   const canAccess = session?.user.role === "ADMIN" || session?.user.role === "INSPECTOR";
 
-  const fetchReports = useCallback(async () => {
+  const fetchReports = useCallback(async (silent = false) => {
     if (!canAccess) return;
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       setError("");
       const result = await queryGraphQL<{ lostAssetReports: LostAssetReportItem[] }>(
         LOST_ASSET_REPORTS_QUERY
       );
       setReports(result.lostAssetReports || []);
     } catch (err: unknown) {
-      setError(errorMessage(err));
+      if (!silent) setError(errorMessage(err));
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [canAccess]);
 
   useEffect(() => {
-    fetchReports();
+    void fetchReports(false);
   }, [fetchReports]);
 
+  // Sincronización automática periódica en segundo plano (cada 8 segundos mientras la pestaña esté activa,
+  // más refresco inmediato al volver el foco a la ventana window.focus / visibilitychange y tras mutaciones)
   useEffect(() => {
-    function handleUpdate() {
-      fetchReports();
+    if (!canAccess) return;
+
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        void fetchReports(true);
+      }
+    }, 8000);
+
+    function handleFocusOrVisibility() {
+      if (document.visibilityState === "visible") {
+        void fetchReports(true);
+      }
     }
+
+    function handleUpdate() {
+      void fetchReports(true);
+    }
+
+    window.addEventListener("focus", handleFocusOrVisibility);
+    document.addEventListener("visibilitychange", handleFocusOrVisibility);
     window.addEventListener("lost-reports-updated", handleUpdate);
-    return () => window.removeEventListener("lost-reports-updated", handleUpdate);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", handleFocusOrVisibility);
+      document.removeEventListener("visibilitychange", handleFocusOrVisibility);
+      window.removeEventListener("lost-reports-updated", handleUpdate);
+    };
+  }, [canAccess, fetchReports]);
+
+  const acknowledgeReport = useCallback(async (id: string) => {
+    // Lectura inmediata: actualizar de inmediato el estado local sin esperar la red ni recargar
+    setReports((prev) =>
+      prev.map((r) => (r.id === id ? { ...r, acknowledged: true } : r))
+    );
+    try {
+      await queryGraphQL<{ acknowledgeLostAssetReport: { id: string; acknowledged: boolean } }>(
+        ACKNOWLEDGE_LOST_REPORT,
+        { id }
+      );
+      window.dispatchEvent(new CustomEvent("lost-reports-updated"));
+    } catch (err: unknown) {
+      void fetchReports(true);
+      throw err;
+    }
   }, [fetchReports]);
+
+  const acknowledgeAll = useCallback(async () => {
+    const unacked = reports.filter((r) => !r.acknowledged);
+    if (unacked.length === 0) return;
+    // Lectura inmediata: marcar todas como vistas en el estado de inmediato
+    setReports((prev) => prev.map((r) => ({ ...r, acknowledged: true })));
+    try {
+      await Promise.all(
+        unacked.map((r) =>
+          queryGraphQL<{ acknowledgeLostAssetReport: { id: string; acknowledged: boolean } }>(
+            ACKNOWLEDGE_LOST_REPORT,
+            { id: r.id }
+          )
+        )
+      );
+      window.dispatchEvent(new CustomEvent("lost-reports-updated"));
+    } catch (err: unknown) {
+      void fetchReports(true);
+      throw err;
+    }
+  }, [reports, fetchReports]);
 
   const unacknowledgedCount = reports.filter((r) => !r.acknowledged).length;
 
@@ -64,6 +127,8 @@ export function useLostReports() {
     loading,
     error,
     refetch: fetchReports,
+    acknowledgeReport,
+    acknowledgeAll,
     canAccess,
   };
 }
@@ -75,6 +140,8 @@ export function LostReportsModal({
   loading,
   error,
   onReportAcknowledged,
+  onAcknowledge,
+  onAcknowledgeAll,
 }: {
   open: boolean;
   onClose: () => void;
@@ -82,27 +149,64 @@ export function LostReportsModal({
   loading: boolean;
   error?: string;
   onReportAcknowledged?: () => void;
+  onAcknowledge?: (id: string) => Promise<void>;
+  onAcknowledgeAll?: () => Promise<void>;
 }) {
   const [acknowledgingId, setAcknowledgingId] = useState<string | null>(null);
+  const [acknowledgingAll, setAcknowledgingAll] = useState(false);
   const [localError, setLocalError] = useState("");
   const [search, setSearch] = useState("");
+
+  const unacknowledgedCount = reports.filter((r) => !r.acknowledged).length;
 
   async function handleAcknowledge(id: string) {
     try {
       setAcknowledgingId(id);
       setLocalError("");
-      await queryGraphQL<{ acknowledgeLostAssetReport: { id: string; acknowledged: boolean } }>(
-        ACKNOWLEDGE_LOST_REPORT,
-        { id }
-      );
-      window.dispatchEvent(new CustomEvent("lost-reports-updated"));
-      if (onReportAcknowledged) {
-        onReportAcknowledged();
+      if (onAcknowledge) {
+        await onAcknowledge(id);
+      } else {
+        await queryGraphQL<{ acknowledgeLostAssetReport: { id: string; acknowledged: boolean } }>(
+          ACKNOWLEDGE_LOST_REPORT,
+          { id }
+        );
+        window.dispatchEvent(new CustomEvent("lost-reports-updated"));
+        if (onReportAcknowledged) {
+          onReportAcknowledged();
+        }
       }
     } catch (err: unknown) {
       setLocalError(errorMessage(err));
     } finally {
       setAcknowledgingId(null);
+    }
+  }
+
+  async function handleAcknowledgeAll() {
+    try {
+      setAcknowledgingAll(true);
+      setLocalError("");
+      if (onAcknowledgeAll) {
+        await onAcknowledgeAll();
+      } else {
+        const unacked = reports.filter((r) => !r.acknowledged);
+        await Promise.all(
+          unacked.map((r) =>
+            queryGraphQL<{ acknowledgeLostAssetReport: { id: string; acknowledged: boolean } }>(
+              ACKNOWLEDGE_LOST_REPORT,
+              { id: r.id }
+            )
+          )
+        );
+        window.dispatchEvent(new CustomEvent("lost-reports-updated"));
+        if (onReportAcknowledged) {
+          onReportAcknowledged();
+        }
+      }
+    } catch (err: unknown) {
+      setLocalError(errorMessage(err));
+    } finally {
+      setAcknowledgingAll(false);
     }
   }
 
@@ -130,15 +234,28 @@ export function LostReportsModal({
           <p className="text-xs text-slate-500 dark:text-slate-400">
             Registro de activos declarados en pérdida con trazabilidad de custodio, fecha exacta y notas.
           </p>
-          <div className="search-control !w-60">
-            <Search size={14} />
-            <input
-              type="text"
-              placeholder="Buscar en reportes…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              aria-label="Buscar en reportes de pérdida"
-            />
+          <div className="flex items-center gap-2 flex-wrap">
+            {unacknowledgedCount > 0 && (
+              <Button
+                variant="secondary"
+                onClick={handleAcknowledgeAll}
+                loading={acknowledgingAll}
+                className="!text-xs !py-1.5 !px-3 border border-slate-300 dark:border-slate-700 hover:border-emerald-500 hover:text-emerald-600"
+              >
+                <CheckCheck size={14} className="mr-1.5 inline text-emerald-600 dark:text-emerald-400" />
+                Marcar todas como vistas ({unacknowledgedCount})
+              </Button>
+            )}
+            <div className="search-control !w-56">
+              <Search size={14} />
+              <input
+                type="text"
+                placeholder="Buscar en reportes…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                aria-label="Buscar en reportes de pérdida"
+              />
+            </div>
           </div>
         </div>
 
@@ -158,10 +275,23 @@ export function LostReportsModal({
             {filtered.map((report) => (
               <div
                 key={report.id}
-                className={`rounded-lg border p-4 transition-colors ${
+                role={!report.acknowledged ? "button" : undefined}
+                tabIndex={!report.acknowledged ? 0 : undefined}
+                onClick={() => {
+                  if (!report.acknowledged) {
+                    void handleAcknowledge(report.id);
+                  }
+                }}
+                onKeyDown={(e) => {
+                  if ((e.key === "Enter" || e.key === " ") && !report.acknowledged) {
+                    e.preventDefault();
+                    void handleAcknowledge(report.id);
+                  }
+                }}
+                className={`rounded-lg border p-4 transition-all ${
                   report.acknowledged
                     ? "border-slate-200 bg-slate-50/70 dark:border-slate-800 dark:bg-slate-900/50 opacity-80"
-                    : "border-rose-200 bg-rose-50/40 dark:border-rose-900/40 dark:bg-rose-950/20 shadow-sm"
+                    : "border-rose-200 bg-rose-50/40 dark:border-rose-900/40 dark:bg-rose-950/20 shadow-sm hover:border-rose-300 dark:hover:border-rose-800 cursor-pointer"
                 }`}
               >
                 <div className="flex items-start justify-between gap-3 flex-wrap">
@@ -201,7 +331,10 @@ export function LostReportsModal({
                     <Button
                       variant="quiet"
                       loading={acknowledgingId === report.id}
-                      onClick={() => handleAcknowledge(report.id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void handleAcknowledge(report.id);
+                      }}
                       className="!text-xs !py-1 !px-3 shrink-0 border border-slate-300 dark:border-slate-700 hover:border-emerald-500 hover:text-emerald-600"
                     >
                       <CheckCircle2 size={14} className="mr-1 inline text-emerald-600 dark:text-emerald-400" />
@@ -234,10 +367,11 @@ export function LostReportsModal({
 }
 
 export function LostReportsBell() {
-  const { reports, unacknowledgedCount, loading, error, refetch, canAccess } = useLostReports();
+  const { session } = useAuth();
+  const { reports, unacknowledgedCount, loading, error, refetch, acknowledgeReport, acknowledgeAll, canAccess } = useLostReports();
   const [modalOpen, setModalOpen] = useState(false);
 
-  if (!canAccess) return null;
+  if (!canAccess || session?.user.role === "TECHNICIAN") return null;
 
   return (
     <>
@@ -263,13 +397,15 @@ export function LostReportsBell() {
         loading={loading}
         error={error}
         onReportAcknowledged={refetch}
+        onAcknowledge={acknowledgeReport}
+        onAcknowledgeAll={acknowledgeAll}
       />
     </>
   );
 }
 
 export function LostReportsBanner() {
-  const { reports, unacknowledgedCount, loading, error, refetch, canAccess } = useLostReports();
+  const { reports, unacknowledgedCount, loading, error, refetch, acknowledgeReport, acknowledgeAll, canAccess } = useLostReports();
   const [modalOpen, setModalOpen] = useState(false);
 
   if (!canAccess || unacknowledgedCount === 0) return null;
@@ -308,6 +444,8 @@ export function LostReportsBanner() {
         loading={loading}
         error={error}
         onReportAcknowledged={refetch}
+        onAcknowledge={acknowledgeReport}
+        onAcknowledgeAll={acknowledgeAll}
       />
     </>
   );

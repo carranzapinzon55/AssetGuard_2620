@@ -15,4 +15,6 @@ public interface AssetRepositoryPort {
     List<Asset> findAll();
 
     long countCurrentlyInField();
+
+    int calculateAvailableQuantity(Long assetId);
 }

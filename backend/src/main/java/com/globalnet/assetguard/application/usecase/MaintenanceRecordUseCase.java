@@ -18,14 +18,17 @@ public class MaintenanceRecordUseCase {
     private final MaintenanceRecordRepositoryPort maintenanceRecordRepositoryPort;
     private final AssetRepositoryPort assetRepositoryPort;
     private final AuditLogUseCase auditLogUseCase;
+    private final LostAssetReportUseCase lostAssetReportUseCase;
 
     public MaintenanceRecordUseCase(
             MaintenanceRecordRepositoryPort maintenanceRecordRepositoryPort,
             AssetRepositoryPort assetRepositoryPort,
-            AuditLogUseCase auditLogUseCase) {
+            AuditLogUseCase auditLogUseCase,
+            LostAssetReportUseCase lostAssetReportUseCase) {
         this.maintenanceRecordRepositoryPort = maintenanceRecordRepositoryPort;
         this.assetRepositoryPort = assetRepositoryPort;
         this.auditLogUseCase = auditLogUseCase;
+        this.lostAssetReportUseCase = lostAssetReportUseCase;
     }
 
     @Transactional
@@ -42,23 +45,26 @@ public class MaintenanceRecordUseCase {
         Long assetId = maintenanceRecord.getAsset().getId();
         Asset asset = assetRepositoryPort.findById(assetId)
                 .orElseThrow(() -> new NoSuchElementException("Asset not found with ID: " + assetId));
-        if ("LOST".equals(asset.getStatus())) {
-            throw new IllegalStateException("A lost asset cannot enter maintenance");
-        }
-        if ("UNDER_MAINTENANCE".equals(asset.getStatus())) {
-            throw new IllegalStateException("Asset is already under maintenance");
+        int available = assetRepositoryPort.calculateAvailableQuantity(assetId);
+        if (available <= 0) {
+            throw new IllegalStateException("Asset has no available units for maintenance");
         }
         maintenanceRecord.setAsset(asset);
         String previousStatus = asset.getStatus();
-        asset.setStatus("UNDER_MAINTENANCE");
+        int remaining = available - 1;
+        if (remaining <= 0) {
+            asset.setStatus("UNDER_MAINTENANCE");
+        } else {
+            asset.setStatus("AVAILABLE");
+        }
         assetRepositoryPort.save(asset);
 
         MaintenanceRecord savedRecord = maintenanceRecordRepositoryPort.save(maintenanceRecord);
         auditLogUseCase.record("MAINTENANCE_OPENED", "MAINTENANCE", savedRecord.getId(),
             "Intervención abierta para el activo " + assetId);
-        if (!"UNDER_MAINTENANCE".equals(previousStatus)) {
+        if (!java.util.Objects.equals(previousStatus, asset.getStatus())) {
             auditLogUseCase.record("ASSET_STATUS_CHANGED", "ASSET", asset.getId(),
-                previousStatus + " -> UNDER_MAINTENANCE");
+                previousStatus + " -> " + asset.getStatus());
         }
         return savedRecord;
     }
@@ -88,9 +94,6 @@ public class MaintenanceRecordUseCase {
         Asset asset = assetRepositoryPort.findById(record.getAsset().getId())
                 .orElseThrow(() -> new NoSuchElementException(
                         "Asset not found: " + record.getAsset().getId()));
-        if (!"UNDER_MAINTENANCE".equals(asset.getStatus())) {
-            throw new IllegalStateException("Asset is not under maintenance");
-        }
 
         if (changes.getProvider() != null) {
             record.setProvider(changes.getProvider());
@@ -126,18 +129,58 @@ public class MaintenanceRecordUseCase {
         }
         Asset asset = assetRepositoryPort.findById(record.getAsset().getId())
                 .orElseThrow(() -> new NoSuchElementException("Asset not found: " + record.getAsset().getId()));
-        if (!"UNDER_MAINTENANCE".equals(asset.getStatus())) {
-            throw new IllegalStateException("Asset is not under maintenance");
-        }
         record.setEndDate(LocalDate.now());
+        String previousStatus = asset.getStatus();
         asset.setStatus("AVAILABLE");
         assetRepositoryPort.save(asset);
         record.setAsset(asset);
         MaintenanceRecord savedRecord = maintenanceRecordRepositoryPort.save(record);
         auditLogUseCase.record("MAINTENANCE_COMPLETED", "MAINTENANCE", savedRecord.getId(),
             "Intervención cerrada para el activo " + asset.getId());
-        auditLogUseCase.record("ASSET_STATUS_CHANGED", "ASSET", asset.getId(),
-            "UNDER_MAINTENANCE -> AVAILABLE");
+        if (!"AVAILABLE".equals(previousStatus)) {
+            auditLogUseCase.record("ASSET_STATUS_CHANGED", "ASSET", asset.getId(),
+                previousStatus + " -> AVAILABLE");
+        }
+        return savedRecord;
+    }
+
+    @Transactional
+    public MaintenanceRecord decommission(Long recordId, String notes, Long operatorId) {
+        if (recordId == null) {
+            throw new IllegalArgumentException("Maintenance record ID is required");
+        }
+        if (notes == null || notes.trim().length() < 10) {
+            throw new IllegalArgumentException("Decommission notes must be at least 10 characters long");
+        }
+        MaintenanceRecord record = maintenanceRecordRepositoryPort.findById(recordId)
+                .orElseThrow(() -> new NoSuchElementException("Maintenance record not found: " + recordId));
+        if (record.getEndDate() != null) {
+            throw new IllegalStateException("Completed maintenance records cannot be decommissioned");
+        }
+        if (record.getAsset() == null || record.getAsset().getId() == null) {
+            throw new IllegalStateException("Maintenance record has no asset");
+        }
+        Asset asset = assetRepositoryPort.findById(record.getAsset().getId())
+                .orElseThrow(() -> new NoSuchElementException("Asset not found: " + record.getAsset().getId()));
+
+        record.setEndDate(LocalDate.now());
+        String reasonPrefix = (record.getReason() != null && !record.getReason().isBlank()) ? record.getReason() + " | " : "";
+        record.setReason(reasonPrefix + "[BAJA DEFINITIVA] " + notes.trim());
+        MaintenanceRecord savedRecord = maintenanceRecordRepositoryPort.save(record);
+
+        lostAssetReportUseCase.reportLost(
+                asset.getId(),
+                null,
+                operatorId,
+                "[BAJA DEFINITIVA EN MANTENIMIENTO] " + notes.trim()
+        );
+
+        Asset updatedAsset = assetRepositoryPort.findById(asset.getId()).orElse(asset);
+        savedRecord.setAsset(updatedAsset);
+
+        auditLogUseCase.record("ASSET_DECOMMISSIONED", "MAINTENANCE", savedRecord.getId(),
+                "Baja definitiva en mantenimiento para el activo " + asset.getId() + ": " + notes.trim());
+
         return savedRecord;
     }
 }

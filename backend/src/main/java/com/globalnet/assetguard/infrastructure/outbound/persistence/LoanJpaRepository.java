@@ -25,6 +25,17 @@ public interface LoanJpaRepository extends JpaRepository<LoanEntity, Long> {
     @EntityGraph(attributePaths = {"user", "asset", "inspector"})
     List<LoanEntity> findByUser_IdOrderByRequestDateDesc(Long userId);
 
+    long countByAsset_IdAndStatus(Long assetId, Loan.Status status);
+
+    @Query("""
+        select loan.asset.id, count(loan.id)
+        from LoanEntity loan
+        where loan.status = com.globalnet.assetguard.domain.model.Loan.Status.APPROVED
+          and loan.asset is not null
+        group by loan.asset.id
+        """)
+    List<Object[]> countApprovedLoansByAsset();
+
     @Query(value = """
         select loan.* from loans loan
         inner join assets asset on loan.asset_id = asset.id

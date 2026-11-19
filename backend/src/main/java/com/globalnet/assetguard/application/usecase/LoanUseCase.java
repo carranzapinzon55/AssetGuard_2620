@@ -92,7 +92,8 @@ public class LoanUseCase {
         }
 
         Asset asset = requireAsset(assetId);
-        if (!"AVAILABLE".equals(asset.getStatus())) {
+        int available = assetRepositoryPort.calculateAvailableQuantity(assetId);
+        if (available <= 0) {
             throw new IllegalStateException("Asset is not available for loan");
         }
 
@@ -119,12 +120,18 @@ public class LoanUseCase {
         requireStatus(loan, Loan.Status.PENDING);
 
         Asset asset = requireAssetFromLoan(loan);
-        if (!"AVAILABLE".equals(asset.getStatus())) {
+        int available = assetRepositoryPort.calculateAvailableQuantity(asset.getId());
+        if (available <= 0) {
             throw new IllegalStateException("Asset is no longer available for loan");
         }
 
         String previousAssetStatus = asset.getStatus();
-        asset.setStatus("LOANED");
+        int remaining = available - 1;
+        if (remaining <= 0) {
+            asset.setStatus("LOANED");
+        } else {
+            asset.setStatus("AVAILABLE");
+        }
         assetRepositoryPort.save(asset);
         loan.setStatus(Loan.Status.APPROVED);
         loan.setInspector(inspector);
@@ -168,13 +175,22 @@ public class LoanUseCase {
         User technician = requireActiveUserWithRole(technicianId, "TECHNICIAN");
         User inspector = inspectorId != null ? userRepositoryPort.findById(inspectorId).orElse(null) : null;
         Asset asset = requireAsset(assetId);
+        int available = assetRepositoryPort.calculateAvailableQuantity(assetId);
+        if (available <= 0) {
+            throw new IllegalStateException("Asset is not available for loan");
+        }
 
         LocalDate start = startDate != null ? startDate : LocalDate.now();
         String sTime = (startTime != null && !startTime.isBlank()) ? startTime : "08:00";
         LocalDateTime startDateTime = start.atTime(java.time.LocalTime.parse(sTime));
 
         String previousStatus = asset.getStatus();
-        asset.setStatus("LOANED");
+        int remaining = available - 1;
+        if (remaining <= 0) {
+            asset.setStatus("LOANED");
+        } else {
+            asset.setStatus("AVAILABLE");
+        }
         assetRepositoryPort.save(asset);
 
         Loan loan = Loan.builder()
@@ -224,7 +240,7 @@ public class LoanUseCase {
     @Transactional
     public Loan returnAssetAsInspector(Long loanId, Loan.ReturnCondition condition, Long inspectorId, String damageDescription) {
         requireActiveUserWithRole(inspectorId, "INSPECTOR");
-        return returnAssetInternal(loanId, condition, null, damageDescription);
+        return returnAssetInternal(loanId, condition, null, damageDescription, inspectorId);
     }
 
     @Transactional
@@ -235,10 +251,14 @@ public class LoanUseCase {
     @Transactional
     public Loan returnAssetAsAdmin(Long loanId, Loan.ReturnCondition condition, Long adminId, String damageDescription) {
         requireActiveUserWithRole(adminId, "ADMIN");
-        return returnAssetInternal(loanId, condition, null, damageDescription);
+        return returnAssetInternal(loanId, condition, null, damageDescription, adminId);
     }
 
     private Loan returnAssetInternal(Long loanId, Loan.ReturnCondition condition, Long borrowerId, String damageDescription) {
+        return returnAssetInternal(loanId, condition, borrowerId, damageDescription, borrowerId);
+    }
+
+    private Loan returnAssetInternal(Long loanId, Loan.ReturnCondition condition, Long borrowerId, String damageDescription, Long operatorId) {
         if (condition == null) {
             throw new IllegalArgumentException("Return condition is required");
         }
@@ -256,17 +276,26 @@ public class LoanUseCase {
                 : Math.toIntExact(Math.max(0, ChronoUnit.DAYS.between(loan.getDueLocalDate(), today)));
 
         String previousAssetStatus = asset.getStatus();
-        asset.setStatus(switch (condition) {
-            case GOOD -> "AVAILABLE";
-            case DAMAGED -> "UNDER_MAINTENANCE";
-            case LOST -> "LOST";
-        });
-        assetRepositoryPort.save(asset);
+        User custodian = loan.getUser();
+        User operator = operatorId != null ? userRepositoryPort.findById(operatorId).orElse(null) : null;
+        String custodianSummary = custodian != null
+                ? formatUserInfo(custodian, "técnico") + " · Préstamo #" + loan.getId()
+                : "Sin técnico asignado · Préstamo #" + loan.getId();
+        String operatorSummary = operator != null
+                ? "Recibido por: " + formatUserInfo(operator, "inspector")
+                : null;
+        String diagnostic = (damageDescription != null && !damageDescription.isBlank()) ? damageDescription.trim() : null;
 
-        if (condition == Loan.ReturnCondition.DAMAGED) {
-            String reason = (damageDescription != null && !damageDescription.isBlank())
-                    ? damageDescription.trim()
-                    : "Daño reportado al devolver el préstamo " + loan.getId();
+        if (condition == Loan.ReturnCondition.GOOD) {
+            int available = assetRepositoryPort.calculateAvailableQuantity(asset.getId()) + 1;
+            if (available > 0) {
+                asset.setStatus("AVAILABLE");
+            }
+            assetRepositoryPort.save(asset);
+        } else if (condition == Loan.ReturnCondition.DAMAGED) {
+            String reason = (diagnostic != null ? diagnostic : "Daño reportado al devolver el préstamo " + loan.getId())
+                    + " [Custodio: " + custodianSummary + "]"
+                    + (operatorSummary != null ? " [" + operatorSummary + "]" : "");
             MaintenanceRecord maintenanceRecord = maintenanceRecordRepositoryPort.save(MaintenanceRecord.builder()
                 .asset(asset)
                 .reason(reason)
@@ -274,13 +303,29 @@ public class LoanUseCase {
                 .startDate(today)
                 .build());
             auditLogUseCase.record("MAINTENANCE_OPENED", "MAINTENANCE", maintenanceRecord.getId(),
-                "Intervención abierta por devolución dañada del activo " + asset.getId() + ": " + reason);
+                "Intervención abierta por devolución dañada del activo " + asset.getId() + " (Custodio: " + custodianSummary + (operatorSummary != null ? ", " + operatorSummary : "") + "): " + (diagnostic != null ? diagnostic : "Sin detalle adicional"));
+            int available = assetRepositoryPort.calculateAvailableQuantity(asset.getId());
+            if (available <= 0) {
+                asset.setStatus("UNDER_MAINTENANCE");
+            } else {
+                asset.setStatus("AVAILABLE");
+            }
+            assetRepositoryPort.save(asset);
         } else if (condition == Loan.ReturnCondition.LOST) {
-            String notes = (damageDescription != null && !damageDescription.isBlank())
-                    ? damageDescription.trim()
-                    : "Equipo reportado no localizado al registrar devolución del préstamo " + loan.getId();
-            Long reporterId = borrowerId != null ? borrowerId : (loan.getUser() != null ? loan.getUser().getId() : null);
-            lostAssetReportUseCase.reportLost(asset.getId(), loan.getId(), reporterId, notes);
+            String notes = (diagnostic != null ? diagnostic : "Equipo reportado no localizado al registrar devolución del préstamo " + loan.getId())
+                    + " [Custodio: " + custodianSummary + "]"
+                    + (operatorSummary != null ? " [" + operatorSummary + "]" : "");
+            Long responsibleUserId = (custodian != null && custodian.getId() != null)
+                    ? custodian.getId()
+                    : (operatorId != null ? operatorId : borrowerId);
+            lostAssetReportUseCase.reportLost(asset.getId(), loan.getId(), responsibleUserId, notes);
+            int available = assetRepositoryPort.calculateAvailableQuantity(asset.getId());
+            if (available <= 0) {
+                asset.setStatus("LOST");
+            } else {
+                asset.setStatus("AVAILABLE");
+            }
+            assetRepositoryPort.save(asset);
         }
 
         loan.setReturnCondition(condition);
@@ -288,8 +333,17 @@ public class LoanUseCase {
         loan.setDelayDays(delayDays);
         loan.setStatus(Loan.Status.RETURNED);
         Loan savedLoan = loanRepositoryPort.save(loan);
-        auditLogUseCase.record("LOAN_RETURNED", "LOAN", savedLoan.getId(),
-            "Devolución registrada con condición " + condition);
+
+        String returnAudit = "Devolución registrada con condición " + condition;
+        if (condition != Loan.ReturnCondition.GOOD) {
+            if (custodian != null) {
+                returnAudit += " | Responsable: " + formatUserInfo(custodian, "técnico");
+            }
+            if (operator != null) {
+                returnAudit += " | Inspector/Receptor: " + formatUserInfo(operator, "inspector");
+            }
+        }
+        auditLogUseCase.record("LOAN_RETURNED", "LOAN", savedLoan.getId(), returnAudit);
         recordAssetStatusChange(asset, previousAssetStatus);
         if (delayDays > 0) {
             auditLogUseCase.recordOnce("LOAN_BECAME_OVERDUE", "LOAN", savedLoan.getId(),
@@ -344,6 +398,18 @@ public class LoanUseCase {
             auditLogUseCase.record("ASSET_STATUS_CHANGED", "ASSET", asset.getId(),
                     previousStatus + " -> " + asset.getStatus());
         }
+    }
+
+    private String formatUserInfo(User user, String fallbackRole) {
+        if (user == null) {
+            return "Sin " + fallbackRole + " asignado";
+        }
+        String name = user.getFullName() != null && !user.getFullName().isBlank()
+                ? user.getFullName().trim()
+                : (user.getEmail() != null && !user.getEmail().isBlank() ? user.getEmail().trim() : "Usuario #" + user.getId());
+        return user.getEmail() != null && !user.getEmail().isBlank() && !name.equalsIgnoreCase(user.getEmail().trim())
+                ? name + " (" + user.getEmail().trim() + ")"
+                : name;
     }
 
     @EventListener(ApplicationReadyEvent.class)

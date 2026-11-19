@@ -192,7 +192,7 @@ export function ProtectedShell({ children }: { children: ReactNode }) {
             <strong>{title}</strong>
           </div>
           <div className="topbar-right">
-            <LostReportsBell />
+            {session.user.role !== "TECHNICIAN" && <LostReportsBell />}
             <WorkspaceTools />
             <span className="environment-pill"><span /> SISTEMA ACTIVO</span>
             <span className="topbar-date">AssetGuard 2620</span>

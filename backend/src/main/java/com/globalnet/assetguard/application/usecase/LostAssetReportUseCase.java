@@ -55,6 +55,18 @@ public class LostAssetReportUseCase {
         LostAssetReport saved = lostAssetReportRepositoryPort.save(report);
         auditLogUseCase.record("ASSET_REPORTED_LOST", "ASSET", asset.getId(),
                 "Activo reportado como perdido: " + (notes != null ? notes : ""));
+        int available = assetRepositoryPort.calculateAvailableQuantity(asset.getId());
+        String previousStatus = asset.getStatus();
+        if (available <= 0) {
+            asset.setStatus("LOST");
+        } else {
+            asset.setStatus("AVAILABLE");
+        }
+        assetRepositoryPort.save(asset);
+        if (!java.util.Objects.equals(previousStatus, asset.getStatus())) {
+            auditLogUseCase.record("ASSET_STATUS_CHANGED", "ASSET", asset.getId(),
+                    previousStatus + " -> " + asset.getStatus());
+        }
         return saved;
     }
 

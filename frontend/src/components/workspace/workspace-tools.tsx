@@ -111,11 +111,15 @@ export function WorkspaceTools() {
     }, 320);
   }
 
+  const isTechnician = session?.user.role === "TECHNICIAN";
+
   return <>
-    <div className="currency-switch" role="group" aria-label="Moneda de visualización" title="Tasa referencial: 1 USD = 4.000 COP">
-      <button type="button" aria-pressed={currency === "USD"} onClick={() => setCurrency("USD")}>USD</button>
-      <button type="button" aria-pressed={currency === "COP"} onClick={() => setCurrency("COP")}>COP</button>
-    </div>
+    {!isTechnician && (
+      <div className="currency-switch" role="group" aria-label="Moneda de visualización" title="Tasa referencial: 1 USD = 4.000 COP">
+        <button type="button" aria-pressed={currency === "USD"} onClick={() => setCurrency("USD")}>USD</button>
+        <button type="button" aria-pressed={currency === "COP"} onClick={() => setCurrency("COP")}>COP</button>
+      </div>
+    )}
     <button type="button" className="workspace-tool-button" onClick={openPalette} aria-label="Búsqueda global" title="Búsqueda global (Ctrl+K)">
       <Search size={15} /><span>Buscar</span><kbd><Command size={10} /> K</kbd>
     </button>

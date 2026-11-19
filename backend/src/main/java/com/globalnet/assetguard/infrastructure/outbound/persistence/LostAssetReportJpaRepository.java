@@ -13,4 +13,14 @@ public interface LostAssetReportJpaRepository extends JpaRepository<LostAssetRep
     List<LostAssetReportEntity> findAllByOrderByReportedAtDesc();
 
     long countByAcknowledgedFalse();
+
+    long countByAsset_Id(Long assetId);
+
+    @org.springframework.data.jpa.repository.Query("""
+        select report.asset.id, count(report.id)
+        from LostAssetReportEntity report
+        where report.asset is not null
+        group by report.asset.id
+        """)
+    List<Object[]> countLostReportsByAsset();
 }

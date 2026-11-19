@@ -5,3 +5,4 @@ export const instant = false;
 export default function AboutPage() {
   return <AboutPageClient />;
 }
+

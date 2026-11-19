@@ -57,13 +57,19 @@ public class AssetGraphQLController {
     @MutationMapping
     @PreAuthorize("hasRole('ADMIN')")
     public GraphQLViews.AssetView createAsset(@Argument("input") AssetInput input) {
+        int initialStock;
+        if ("AVAILABLE".equalsIgnoreCase(input.status())) {
+            initialStock = (input.stockQuantity() != null && input.stockQuantity() >= 1) ? input.stockQuantity() : 1;
+        } else {
+            initialStock = 1;
+        }
         Asset asset = Asset.builder()
                 .serialNumber(input.serialNumber())
                 .model(input.model())
                 .estimatedValue(input.estimatedValue())
                 .status(input.status())
                 .purchaseDate(input.purchaseDate() == null ? null : LocalDate.parse(input.purchaseDate()))
-                .stockQuantity(input.stockQuantity())
+                .stockQuantity(initialStock)
                 .build();
         Asset savedAsset = assetUseCase.register(asset);
         handleLifecycleSideEffects(
@@ -78,19 +84,29 @@ public class AssetGraphQLController {
                 input.maintenanceCost(),
                 input.maintenanceProviderName(),
                 input.lostNotes());
-        return GraphQLViews.AssetView.from(savedAsset);
+        Asset reloaded = assetUseCase.findById(savedAsset.getId());
+        return GraphQLViews.AssetView.from(reloaded);
     }
 
     @MutationMapping
     @PreAuthorize("hasRole('ADMIN')")
     public GraphQLViews.AssetView updateAsset(@Argument("input") UpdateAssetInput input) {
+        Asset existing = assetUseCase.findById(input.id());
+        Integer stockQuantityToSet;
+        if ("AVAILABLE".equalsIgnoreCase(input.status())) {
+            stockQuantityToSet = (input.stockQuantity() != null && input.stockQuantity() >= 1)
+                    ? input.stockQuantity()
+                    : existing.getStockQuantity();
+        } else {
+            stockQuantityToSet = existing.getStockQuantity();
+        }
         Asset changes = Asset.builder()
                 .serialNumber(input.serialNumber())
                 .model(input.model())
                 .estimatedValue(input.estimatedValue())
                 .status(input.status())
                 .purchaseDate(input.purchaseDate() == null ? null : LocalDate.parse(input.purchaseDate()))
-                .stockQuantity(input.stockQuantity())
+                .stockQuantity(stockQuantityToSet)
                 .build();
         Asset updatedAsset = assetUseCase.update(input.id(), changes);
         handleLifecycleSideEffects(
@@ -105,7 +121,8 @@ public class AssetGraphQLController {
                 input.maintenanceCost(),
                 input.maintenanceProviderName(),
                 input.lostNotes());
-        return GraphQLViews.AssetView.from(updatedAsset);
+        Asset reloaded = assetUseCase.findById(updatedAsset.getId());
+        return GraphQLViews.AssetView.from(reloaded);
     }
 
     private void handleLifecycleSideEffects(

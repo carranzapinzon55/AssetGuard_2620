@@ -4,6 +4,7 @@ import com.globalnet.assetguard.application.usecase.MaintenanceRecordUseCase;
 import com.globalnet.assetguard.domain.model.Asset;
 import com.globalnet.assetguard.domain.model.MaintenanceRecord;
 import com.globalnet.assetguard.domain.model.Provider;
+import com.globalnet.assetguard.infrastructure.security.CurrentAuthenticatedUser;
 import java.time.LocalDate;
 import org.springframework.graphql.data.method.annotation.Argument;
 import org.springframework.graphql.data.method.annotation.MutationMapping;
@@ -16,10 +17,13 @@ import java.util.List;
 public class MaintenanceRecordGraphQLController {
 
     private final MaintenanceRecordUseCase maintenanceRecordUseCase;
+    private final CurrentAuthenticatedUser currentAuthenticatedUser;
 
     public MaintenanceRecordGraphQLController(
-            MaintenanceRecordUseCase maintenanceRecordUseCase) {
+            MaintenanceRecordUseCase maintenanceRecordUseCase,
+            CurrentAuthenticatedUser currentAuthenticatedUser) {
         this.maintenanceRecordUseCase = maintenanceRecordUseCase;
+        this.currentAuthenticatedUser = currentAuthenticatedUser;
     }
 
     @QueryMapping
@@ -56,6 +60,16 @@ public class MaintenanceRecordGraphQLController {
     @PreAuthorize("hasAnyRole('ADMIN', 'INSPECTOR')")
     public GraphQLViews.MaintenanceRecordView completeMaintenance(@Argument("input") CompleteMaintenanceInput input) {
         return GraphQLViews.MaintenanceRecordView.from(maintenanceRecordUseCase.complete(input.recordId()));
+    }
+
+    @MutationMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'INSPECTOR')")
+    public GraphQLViews.MaintenanceRecordView decommissionFromMaintenance(
+            @Argument("id") Long id,
+            @Argument("notes") String notes) {
+        Long operatorId = currentAuthenticatedUser.requirePrincipal().userId();
+        return GraphQLViews.MaintenanceRecordView.from(
+                maintenanceRecordUseCase.decommission(id, notes, operatorId));
     }
 
     @MutationMapping

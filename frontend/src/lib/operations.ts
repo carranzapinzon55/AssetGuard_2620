@@ -18,25 +18,25 @@ export const UPDATE_USER = `
 
 export const ASSETS_QUERY = `
   query Assets($limit: Int = 50) {
-    assets(limit: $limit) { id serialNumber model estimatedValue status purchaseDate stockQuantity }
+    assets(limit: $limit) { id serialNumber model estimatedValue status purchaseDate stockQuantity availableQuantity }
   }
 `;
 
 export const ASSETS_CATALOG_QUERY = `
   query AssetCatalog($limit: Int = 50) {
-    assets(limit: $limit) { id serialNumber model status }
+    assets(limit: $limit) { id serialNumber model status stockQuantity availableQuantity }
   }
 `;
 
 export const CREATE_ASSET = `
   mutation CreateAsset($input: AssetInput!) {
-    createAsset(input: $input) { id serialNumber model estimatedValue status purchaseDate stockQuantity }
+    createAsset(input: $input) { id serialNumber model estimatedValue status purchaseDate stockQuantity availableQuantity }
   }
 `;
 
 export const UPDATE_ASSET = `
   mutation UpdateAsset($input: UpdateAssetInput!) {
-    updateAsset(input: $input) { id serialNumber model estimatedValue status purchaseDate stockQuantity }
+    updateAsset(input: $input) { id serialNumber model estimatedValue status purchaseDate stockQuantity availableQuantity }
   }
 `;
 
@@ -63,6 +63,7 @@ export const MY_LOAN_HISTORY = `
   query MyLoanHistory {
     myLoanHistory {
       id requestDate dueLocalDate returnDateTime status returnCondition delayDays rejectionReason
+      user { id fullName email }
       asset { id serialNumber model status }
     }
   }
@@ -96,7 +97,7 @@ export const MAINTENANCE_QUERY = `
   query MaintenanceRecords {
     maintenanceRecords {
       id providerName reason cost startDate endDate
-      asset { id serialNumber model status }
+      asset { id serialNumber model status estimatedValue }
     }
   }
 `;
@@ -105,7 +106,7 @@ export const CREATE_MAINTENANCE = `
   mutation CreateMaintenance($input: MaintenanceRecordInput!) {
     createMaintenanceRecord(input: $input) {
       id providerName reason cost startDate endDate
-      asset { id serialNumber model status }
+      asset { id serialNumber model status estimatedValue }
     }
   }
 `;
@@ -113,6 +114,14 @@ export const CREATE_MAINTENANCE = `
 export const COMPLETE_MAINTENANCE = `
   mutation CompleteMaintenance($input: CompleteMaintenanceInput!) {
     completeMaintenance(input: $input) { id endDate asset { id status } }
+  }
+`;
+
+export const DECOMMISSION_FROM_MAINTENANCE = `
+  mutation DecommissionFromMaintenance($id: ID!, $notes: String!) {
+    decommissionFromMaintenance(id: $id, notes: $notes) {
+      id endDate asset { id status availableQuantity }
+    }
   }
 `;
 
@@ -137,7 +146,7 @@ export const UPLOAD_ASSETS = `
   mutation UploadAssetsBulk($input: BulkUploadInput!) {
     uploadAssetsBulk(input: $input) {
       importedCount
-      assets { id serialNumber model estimatedValue purchaseDate status }
+      assets { id serialNumber model estimatedValue purchaseDate status stockQuantity availableQuantity }
     }
   }
 `;

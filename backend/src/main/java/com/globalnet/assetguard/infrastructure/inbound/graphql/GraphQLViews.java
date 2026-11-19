@@ -52,18 +52,23 @@ public final class GraphQLViews {
             Double estimatedValue,
             String status,
             String purchaseDate,
-            Integer stockQuantity) {
+            Integer stockQuantity,
+            Integer availableQuantity) {
         public static AssetView from(Asset asset) {
-            return asset == null
-                    ? null
-                    : new AssetView(
-                            asset.getId(),
-                            asset.getSerialNumber(),
-                            asset.getModel(),
-                            asset.getEstimatedValue(),
-                            asset.getStatus(),
-                            asset.getPurchaseDate() == null ? null : asset.getPurchaseDate().toString(),
-                            asset.getStockQuantity());
+            if (asset == null) {
+                return null;
+            }
+            int stock = asset.getStockQuantity() != null ? asset.getStockQuantity() : 1;
+            int available = asset.getAvailableQuantity() != null ? asset.getAvailableQuantity() : stock;
+            return new AssetView(
+                    asset.getId(),
+                    asset.getSerialNumber(),
+                    asset.getModel(),
+                    asset.getEstimatedValue(),
+                    asset.getStatus(),
+                    asset.getPurchaseDate() == null ? null : asset.getPurchaseDate().toString(),
+                    stock,
+                    available);
         }
     }
 

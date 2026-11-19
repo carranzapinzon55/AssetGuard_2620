@@ -107,4 +107,61 @@ class AssetUseCaseTest {
         Asset saved = assetUseCase.register(request);
         assertEquals(1, saved.getStockQuantity());
     }
+
+    @Test
+    void registerForcesStockToOneWhenInitialStatusIsNotAvailable() {
+        Asset request = Asset.builder()
+                .model("Dell Latitude")
+                .status("LOANED")
+                .stockQuantity(10)
+                .build();
+        when(assetRepositoryPort.save(any(Asset.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Asset saved = assetUseCase.register(request);
+        assertEquals(1, saved.getStockQuantity());
+    }
+
+    @Test
+    void updateDoesNotOverwriteStockQuantityWhenStatusIsNotAvailable() {
+        Asset existing = Asset.builder()
+                .id(15L)
+                .serialNumber("SN-DELL-12345678")
+                .model("Dell Latitude")
+                .status("AVAILABLE")
+                .stockQuantity(5)
+                .build();
+        when(assetRepositoryPort.findById(15L)).thenReturn(Optional.of(existing));
+        when(assetRepositoryPort.save(any(Asset.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Asset updated = assetUseCase.update(15L, Asset.builder()
+                .model("Dell Latitude")
+                .status("UNDER_MAINTENANCE")
+                .stockQuantity(99)
+                .build());
+
+        assertEquals(5, updated.getStockQuantity());
+        assertEquals("UNDER_MAINTENANCE", updated.getStatus());
+    }
+
+    @Test
+    void updateAllowsStockAdjustmentWhenStatusIsAvailable() {
+        Asset existing = Asset.builder()
+                .id(16L)
+                .serialNumber("SN-DELL-87654321")
+                .model("Dell Latitude")
+                .status("AVAILABLE")
+                .stockQuantity(3)
+                .build();
+        when(assetRepositoryPort.findById(16L)).thenReturn(Optional.of(existing));
+        when(assetRepositoryPort.save(any(Asset.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Asset updated = assetUseCase.update(16L, Asset.builder()
+                .model("Dell Latitude")
+                .status("AVAILABLE")
+                .stockQuantity(8)
+                .build());
+
+        assertEquals(8, updated.getStockQuantity());
+        assertEquals("AVAILABLE", updated.getStatus());
+    }
 }

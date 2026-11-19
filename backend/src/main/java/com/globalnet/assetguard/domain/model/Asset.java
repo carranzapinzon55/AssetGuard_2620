@@ -20,4 +20,5 @@ public class Asset {
     private String status;
     private LocalDate purchaseDate;
     private Integer stockQuantity;
+    private Integer availableQuantity;
 }
