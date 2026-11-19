@@ -136,8 +136,9 @@ class BulkUploadAssetsUseCaseIntegrationTest {
 
         var metrics = loanRepositoryPort.calculateDashboardMetrics();
 
-        assertEquals(0, new BigDecimal("350.0").compareTo(metrics.estimatedLossValue()));
+        assertEquals(0, new BigDecimal("100.0").compareTo(metrics.estimatedLossValue()));
         assertEquals(0, new BigDecimal("40.0").compareTo(metrics.maintenanceCostsValue()));
+        assertEquals(0, new BigDecimal("140.0").compareTo(metrics.totalEconomicLoss()));
         assertEquals(50.0, metrics.onTimeReturnPercentage(), 0.001);
         assertEquals(1, metrics.assetsCurrentlyInField());
         assertEquals(3, metrics.totalAssets());
@@ -155,6 +156,7 @@ class BulkUploadAssetsUseCaseIntegrationTest {
         assertEquals(0, new BigDecimal("100.0")
                 .compareTo(previousDayMetrics.estimatedLossValue()));
         assertEquals(0, BigDecimal.ZERO.compareTo(previousDayMetrics.maintenanceCostsValue()));
+        assertEquals(0, new BigDecimal("100.0").compareTo(previousDayMetrics.totalEconomicLoss()));
     }
 
     private UserEntity saveTechnician(String email) {

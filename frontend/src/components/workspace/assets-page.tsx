@@ -12,7 +12,7 @@ import { errorMessage, queryGraphQL, type AssetItem, type ProviderItem, type Use
 
 type AssetsResult = { assets: AssetItem[] };
 type AssetResult = { createAsset: AssetItem; updateAsset: AssetItem };
-const MAX_ASSETS = 50;
+const MAX_ASSETS = 50000;
 const blankAsset = { model: "", estimatedValue: "", purchaseDate: "", status: "AVAILABLE", stockQuantity: "1" };
 
 function getLocalTodayIso(): string {

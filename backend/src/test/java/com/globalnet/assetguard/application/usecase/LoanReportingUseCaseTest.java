@@ -2,6 +2,7 @@ package com.globalnet.assetguard.application.usecase;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -12,6 +13,11 @@ import com.globalnet.assetguard.domain.model.AssetModelMetrics;
 import com.globalnet.assetguard.domain.ports.output.AssetRepositoryPort;
 import com.globalnet.assetguard.domain.ports.output.LoanRepositoryPort;
 import com.globalnet.assetguard.domain.ports.output.UserRepositoryPort;
+import com.globalnet.assetguard.infrastructure.outbound.persistence.AssetJpaRepository;
+import com.globalnet.assetguard.infrastructure.outbound.persistence.LoanJpaRepository;
+import com.globalnet.assetguard.infrastructure.outbound.persistence.LostAssetReportJpaRepository;
+import com.globalnet.assetguard.infrastructure.outbound.persistence.MaintenanceRecordJpaRepository;
+import com.globalnet.assetguard.infrastructure.outbound.persistence.adapter.LoanPersistenceAdapter;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -32,6 +38,18 @@ class LoanReportingUseCaseTest {
 
     @Mock
     private UserRepositoryPort userRepositoryPort;
+
+    @Mock
+    private LoanJpaRepository loanJpaRepository;
+
+    @Mock
+    private AssetJpaRepository assetJpaRepository;
+
+    @Mock
+    private MaintenanceRecordJpaRepository maintenanceRecordJpaRepository;
+
+    @Mock
+    private LostAssetReportJpaRepository lostAssetReportJpaRepository;
 
     @InjectMocks
     private LoanUseCase loanUseCase;
@@ -95,5 +113,69 @@ class LoanReportingUseCaseTest {
                 () -> loanUseCase.dashboardMetrics(start, end));
 
         assertEquals("startDate must be before or equal to endDate", exception.getMessage());
+    }
+
+    @Test
+    void loanPersistenceAdapterCalculatesEstimatedLossCombiningLostLoansAndLostReports() {
+        LoanPersistenceAdapter adapter = new LoanPersistenceAdapter(
+                loanJpaRepository, assetJpaRepository, maintenanceRecordJpaRepository, lostAssetReportJpaRepository);
+
+        when(loanJpaRepository.sumEstimatedLossValue(null, null)).thenReturn(new BigDecimal("250.00"));
+        when(lostAssetReportJpaRepository.sumEstimatedLossValue(null, null)).thenReturn(new BigDecimal("150.00"));
+        when(maintenanceRecordJpaRepository.sumCostsForStartDateRange(null, null)).thenReturn(40.0);
+        when(loanJpaRepository.onTimeReturnPercentage(null, null)).thenReturn(80.0);
+        when(assetJpaRepository.countByStatusIn(any())).thenReturn(2L);
+        when(assetJpaRepository.count()).thenReturn(10L);
+        when(assetJpaRepository.summarizeByModel()).thenReturn(List.of());
+
+        LoanDashboardMetrics metrics = adapter.calculateDashboardMetrics();
+
+        assertEquals(0, new BigDecimal("400.00").compareTo(metrics.estimatedLossValue()));
+        assertEquals(0, new BigDecimal("440.00").compareTo(metrics.totalEconomicLoss()));
+        verify(loanJpaRepository).sumEstimatedLossValue(null, null);
+        verify(lostAssetReportJpaRepository).sumEstimatedLossValue(null, null);
+    }
+
+    @Test
+    void loanPersistenceAdapterFiltersEstimatedLossByDateRangeForLoansAndLostReports() {
+        LoanPersistenceAdapter adapter = new LoanPersistenceAdapter(
+                loanJpaRepository, assetJpaRepository, maintenanceRecordJpaRepository, lostAssetReportJpaRepository);
+
+        LocalDateTime start = LocalDateTime.of(2026, 11, 1, 0, 0);
+        LocalDateTime end = LocalDateTime.of(2026, 11, 30, 23, 59, 59);
+
+        when(loanJpaRepository.sumEstimatedLossValue(start, end)).thenReturn(new BigDecimal("300.00"));
+        when(lostAssetReportJpaRepository.sumEstimatedLossValue(start, end)).thenReturn(new BigDecimal("200.00"));
+        when(maintenanceRecordJpaRepository.sumCostsForStartDateRange(start.toLocalDate(), end.toLocalDate())).thenReturn(50.0);
+        when(loanJpaRepository.onTimeReturnPercentage(start, end)).thenReturn(90.0);
+        when(assetJpaRepository.countByStatusIn(any())).thenReturn(1L);
+        when(assetJpaRepository.count()).thenReturn(5L);
+        when(assetJpaRepository.summarizeByModel()).thenReturn(List.of());
+
+        LoanDashboardMetrics metrics = adapter.calculateDashboardMetrics(start, end);
+
+        assertEquals(0, new BigDecimal("500.00").compareTo(metrics.estimatedLossValue()));
+        assertEquals(0, new BigDecimal("550.00").compareTo(metrics.totalEconomicLoss()));
+        verify(loanJpaRepository).sumEstimatedLossValue(start, end);
+        verify(lostAssetReportJpaRepository).sumEstimatedLossValue(start, end);
+    }
+
+    @Test
+    void loanPersistenceAdapterAvoidsDuplicateLossWhenReportBelongsToLostLoan() {
+        LoanPersistenceAdapter adapter = new LoanPersistenceAdapter(
+                loanJpaRepository, assetJpaRepository, maintenanceRecordJpaRepository, lostAssetReportJpaRepository);
+
+        when(loanJpaRepository.sumEstimatedLossValue(null, null)).thenReturn(new BigDecimal("350.00"));
+        when(lostAssetReportJpaRepository.sumEstimatedLossValue(null, null)).thenReturn(BigDecimal.ZERO);
+        when(maintenanceRecordJpaRepository.sumCostsForStartDateRange(null, null)).thenReturn(0.0);
+        when(loanJpaRepository.onTimeReturnPercentage(null, null)).thenReturn(100.0);
+        when(assetJpaRepository.countByStatusIn(any())).thenReturn(0L);
+        when(assetJpaRepository.count()).thenReturn(3L);
+        when(assetJpaRepository.summarizeByModel()).thenReturn(List.of());
+
+        LoanDashboardMetrics metrics = adapter.calculateDashboardMetrics();
+
+        assertEquals(0, new BigDecimal("350.00").compareTo(metrics.estimatedLossValue()));
+        assertEquals(0, new BigDecimal("350.00").compareTo(metrics.totalEconomicLoss()));
     }
 }

@@ -25,6 +25,53 @@ function getLocalTodayIso(): string {
   return `${year}-${month}-${day}`;
 }
 
+function getLocalCurrentTime(): string {
+  const now = new Date();
+  const hours = String(now.getHours()).padStart(2, "0");
+  const minutes = String(now.getMinutes()).padStart(2, "0");
+  return `${hours}:${minutes}`;
+}
+
+function getInitialStartTime(dateStr: string): string {
+  const today = getLocalTodayIso();
+  if (dateStr !== today) {
+    return "08:00";
+  }
+  const now = new Date();
+  let hours = now.getHours();
+  let minutes = now.getMinutes();
+
+  if (hours < 8) {
+    return "08:00";
+  }
+  if (hours >= 17) {
+    return "17:00";
+  }
+
+  // Round up to next 15-minute block
+  const remainder = minutes % 15;
+  if (remainder > 0) {
+    minutes += 15 - remainder;
+    if (minutes >= 60) {
+      hours += 1;
+      minutes = 0;
+    }
+  }
+
+  if (hours > 17 || (hours === 17 && minutes > 0)) {
+    return "17:00";
+  }
+
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+}
+
+function addOneHour(timeStr: string): string {
+  if (!timeStr || !timeStr.includes(":")) return "09:00";
+  const [h, m] = timeStr.split(":").map(Number);
+  const nextH = Math.min(h + 1, 18);
+  return `${String(nextH).padStart(2, "0")}:${String(m ?? 0).padStart(2, "0")}`;
+}
+
 export function LoansPage() {
   const { session } = useAuth();
   const pathname = usePathname();
@@ -41,9 +88,9 @@ export function LoansPage() {
   const [requestConfirmationOpen, setRequestConfirmationOpen] = useState(false);
   const [assetId, setAssetId] = useState("");
   const [loanDate, setLoanDate] = useState(today);
-  const [loanTime, setLoanTime] = useState("08:00");
-  const [dueDate, setDueDate] = useState("");
-  const [dueTime, setDueTime] = useState("09:00");
+  const [loanTime, setLoanTime] = useState(() => getInitialStartTime(today));
+  const [dueDate, setDueDate] = useState(today);
+  const [dueTime, setDueTime] = useState(() => addOneHour(getInitialStartTime(today)));
   const [rejecting, setRejecting] = useState<LoanItem | null>(null);
   const [reason, setReason] = useState("");
   const [returning, setReturning] = useState<LoanItem | null>(null);
@@ -201,19 +248,48 @@ export function LoansPage() {
   });
   const selectedAsset = catalogAssets.find((asset) => asset.id === assetId);
 
+  const currentTime = getLocalCurrentTime();
+  const minStartTime = loanDate === today
+    ? (currentTime > "08:00" ? (currentTime > "18:00" ? "18:00" : currentTime) : "08:00")
+    : "08:00";
+
+  let minDueTime = "08:00";
+  if (dueDate === loanDate) {
+    minDueTime = addOneHour(loanTime || "08:00");
+  }
+  if (dueDate === today && currentTime > minDueTime) {
+    minDueTime = currentTime > "18:00" ? "18:00" : currentTime;
+  }
+
+  function openLoanRequest(id = "") {
+    const currentToday = getLocalTodayIso();
+    const initStartTime = getInitialStartTime(currentToday);
+    const initDueTime = addOneHour(initStartTime);
+    setAssetId(id);
+    setLoanDate(currentToday);
+    setLoanTime(initStartTime);
+    setDueDate(currentToday);
+    setDueTime(initDueTime);
+    setFeedback({});
+    setShowRequest(true);
+  }
+
   async function submitRequest(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (overdue) return;
+    const currentToday = getLocalTodayIso();
+    const currentClock = getLocalCurrentTime();
+
     if (!assetId) {
       setFeedback({ error: "Debes seleccionar un equipo disponible." });
       return;
     }
-    if (!dueDate || dueDate < getLocalTodayIso()) {
-      setFeedback({ error: "La fecha prevista de devolución no puede ser anterior a hoy." });
+    if (!loanDate || loanDate < currentToday) {
+      setFeedback({ error: "La fecha de inicio del préstamo no puede ser anterior a hoy." });
       return;
     }
-    if (loanDate < getLocalTodayIso()) {
-      setFeedback({ error: "La fecha de inicio del préstamo no puede ser anterior a hoy." });
+    if (!dueDate || dueDate < currentToday) {
+      setFeedback({ error: "La fecha prevista de devolución no puede ser anterior a hoy." });
       return;
     }
     if (dueDate < loanDate) {
@@ -223,6 +299,23 @@ export function LoansPage() {
     if (!isOperationalTime(loanTime) || !isOperationalTime(dueTime)) {
       setFeedback({ error: "Las horas de préstamo y devolución deben estar entre 08:00 y 18:00." });
       return;
+    }
+    if (loanDate === currentToday && loanTime < currentClock) {
+      setFeedback({ error: "La hora de inicio no puede ser anterior a la hora actual." });
+      return;
+    }
+    if (dueDate === currentToday && dueTime < currentClock) {
+      setFeedback({ error: "La hora de devolución no puede ser anterior a la hora actual." });
+      return;
+    }
+    if (dueDate === loanDate) {
+      const [startH, startM] = loanTime.split(":").map(Number);
+      const [endH, endM] = dueTime.split(":").map(Number);
+      const diffMinutes = (endH * 60 + endM) - (startH * 60 + startM);
+      if (diffMinutes < 60) {
+        setFeedback({ error: "La hora de devolución debe ser al menos 1 hora después de la hora de inicio cuando el préstamo es el mismo día." });
+        return;
+      }
     }
     const loanStartsAt = new Date(`${loanDate}T${loanTime}:00`).getTime();
     const loanEndsAt = new Date(`${dueDate}T${dueTime}:00`).getTime();
@@ -247,7 +340,17 @@ export function LoansPage() {
           endTime: dueTime,
         },
       });
-      setRequestConfirmationOpen(false); setAssetId(""); setLoanDate(today); setLoanTime("08:00"); setDueDate(""); setDueTime("09:00"); setLoanPage(0); setFeedback({ success: "Solicitud enviada para revisión." }); setRefresh((value) => value + 1);
+      setRequestConfirmationOpen(false);
+      setAssetId("");
+      const currentToday = getLocalTodayIso();
+      const nextStart = getInitialStartTime(currentToday);
+      setLoanDate(currentToday);
+      setLoanTime(nextStart);
+      setDueDate(currentToday);
+      setDueTime(addOneHour(nextStart));
+      setLoanPage(0);
+      setFeedback({ success: "Solicitud enviada para revisión." });
+      setRefresh((value) => value + 1);
       window.dispatchEvent(new CustomEvent("loans-updated"));
     } catch (error) {
       setRequestConfirmationOpen(false);
@@ -332,7 +435,7 @@ export function LoansPage() {
   const title = technician ? "Mis préstamos" : inspector ? "Bandeja de préstamos" : "Préstamos";
   return (
     <div className="work-page loans-page-layout">
-      <PageTitle eyebrow={technician ? "CUSTODIAS · TÉCNICO" : inspector ? "OPERACIONES · INSPECCIÓN" : "OPERACIONES · CUSTODIAS"} title={title} description={technician ? "Explora el catálogo, solicita equipos y sigue el estado de tus custodias." : inspector ? "Revisa solicitudes pendientes y registra devoluciones físicas." : "Consulta el ciclo de vida de solicitudes y custodias."} action={technician ? <Button onClick={() => { setAssetId(""); setShowRequest(true); }} disabled={overdue}><CalendarClock size={16} /> Solicitar préstamo</Button> : undefined} />
+      <PageTitle eyebrow={technician ? "CUSTODIAS · TÉCNICO" : inspector ? "OPERACIONES · INSPECCIÓN" : "OPERACIONES · CUSTODIAS"} title={title} description={technician ? "Explora el catálogo, solicita equipos y sigue el estado de tus custodias." : inspector ? "Revisa solicitudes pendientes y registra devoluciones físicas." : "Consulta el ciclo de vida de solicitudes y custodias."} action={technician ? <Button onClick={() => openLoanRequest("")} disabled={overdue}><CalendarClock size={16} /> Solicitar préstamo</Button> : undefined} />
       {overdue && <div className="work-feedback error" role="alert"><CircleAlert size={16} /><span>Tienes una devolución vencida. No puedes solicitar nuevos préstamos hasta regularizarla.</span></div>}
       <Feedback {...feedback} />
       <section className="work-section">
@@ -357,7 +460,7 @@ export function LoansPage() {
               <option value="ASSET_ASC">Activo (A-Z)</option>
             </SelectInput>
             <button type="button" className="loans-collapse-trigger" aria-expanded={loansExpanded} aria-controls="loan-history-panel" onClick={() => setLoansExpanded((expanded) => !expanded)}>
-              <span>{loansExpanded ? "Contraer" : "Expandir"}</span><ChevronDown size={16} aria-hidden="true" />
+              <span>{loansExpanded ? "Contraer" : "Mostrar tabla"}</span>
             </button>
           </div>
         </div>
@@ -391,7 +494,7 @@ export function LoansPage() {
                 ? `${avail} / ${total} ${avail === 1 ? "disponible" : "disponibles"}`
                 : `No disponible (0 / ${total})`;
               return (
-                <button className="loan-asset-card" type="button" key={asset.id} onClick={() => { setAssetId(asset.id); setShowRequest(true); }}>
+                <button className="loan-asset-card" type="button" key={asset.id} onClick={() => openLoanRequest(asset.id)}>
                   <span className="asset-card-photo"><Laptop size={34} strokeWidth={1.3} /><span className={`asset-availability ${isAvailable ? "available" : "unavailable"}`}><i />{availabilityText}</span></span>
                   <span className="asset-card-copy"><span className="asset-card-brand">{brand}</span><strong>{asset.model || "Activo"}</strong><small className="telemetry-value">{asset.serialNumber}</small></span>
                 </button>
@@ -419,7 +522,7 @@ export function LoansPage() {
                   <span>{selectedAsset.model || "Activo"}</span>
                 </div>
               )}
-              {technician && (!selectedAsset || (selectedAsset.availableQuantity ?? 0) > 0) ? <form className="work-form" onSubmit={submitRequest}><div className="work-field"><span>Activo disponible</span><div className="asset-combobox-row"><Combobox value={assetId} onValueChange={setAssetId} options={assetOptions} placeholder="Selecciona un equipo" searchPlaceholder="Buscar por serie o modelo" emptyMessage="No hay equipos disponibles." required />{selectedAsset && <CopyButton text={selectedAsset.serialNumber} label={`Copiar serie ${selectedAsset.serialNumber}`} />}</div></div><div className="form-grid two-col"><FormField label="Fecha de inicio"><TextInput type="date" value={loanDate} onChange={(event) => setLoanDate(event.target.value)} min={today} required /></FormField><FormField label="Hora de inicio"><TextInput type="time" min="08:00" max="18:00" value={loanTime} onChange={(event) => setLoanTime(event.target.value)} required /></FormField><FormField label="Fecha prevista de devolución"><TextInput type="date" min={loanDate || today} value={dueDate} onChange={(event) => setDueDate(event.target.value)} required /></FormField><FormField label="Hora prevista de devolución"><TextInput type="time" min="08:00" max="18:00" value={dueTime} onChange={(event) => setDueTime(event.target.value)} required /></FormField></div><p className="form-hint">Horario operativo: 08:00–18:00. El préstamo debe durar al menos una hora. La solicitud quedará pendiente hasta la aprobación de un inspector.</p><div className="modal-actions"><Button variant="secondary" type="button" onClick={() => setShowRequest(false)}>Cancelar</Button><Button type="submit" loading={saving} disabled={overdue}>Enviar solicitud</Button></div></form> : <div className="drawer-unavailable"><p>{technician ? "Este activo no está disponible para una nueva solicitud." : "Consulta el estado de este activo en el catálogo."}</p><Button variant="secondary" type="button" onClick={() => setShowRequest(false)}>Cerrar detalle</Button></div>}
+              {technician && (!selectedAsset || (selectedAsset.availableQuantity ?? 0) > 0) ? <form className="work-form" onSubmit={submitRequest}><div className="work-field"><span>Activo disponible</span><div className="asset-combobox-row"><Combobox value={assetId} onValueChange={setAssetId} options={assetOptions} placeholder="Selecciona un equipo" searchPlaceholder="Buscar por serie o modelo" emptyMessage="No hay equipos disponibles." required />{selectedAsset && <CopyButton text={selectedAsset.serialNumber} label={`Copiar serie ${selectedAsset.serialNumber}`} />}</div></div><div className="form-grid two-col"><FormField label="Fecha de inicio"><TextInput type="date" value={loanDate} onChange={(event) => { const newDate = event.target.value; setLoanDate(newDate); if (newDate === today) { const nextValid = getInitialStartTime(newDate); if (loanTime < nextValid) { setLoanTime(nextValid); if (dueDate === newDate && dueTime < addOneHour(nextValid)) { setDueTime(addOneHour(nextValid)); } } } if (dueDate && dueDate < newDate) { setDueDate(newDate); } }} min={today} required /></FormField><FormField label="Hora de inicio"><TextInput type="time" min={minStartTime} max="18:00" value={loanTime} onChange={(event) => { const newTime = event.target.value; setLoanTime(newTime); if (dueDate === loanDate && (!dueTime || dueTime < addOneHour(newTime))) { setDueTime(addOneHour(newTime)); } }} required /></FormField><FormField label="Fecha prevista de devolución"><TextInput type="date" min={loanDate || today} value={dueDate} onChange={(event) => { const newDueDate = event.target.value; setDueDate(newDueDate); if (newDueDate === loanDate && dueTime < addOneHour(loanTime)) { setDueTime(addOneHour(loanTime)); } }} required /></FormField><FormField label="Hora prevista de devolución"><TextInput type="time" min={minDueTime} max="18:00" value={dueTime} onChange={(event) => setDueTime(event.target.value)} required /></FormField></div><p className="form-hint">Horario operativo: 08:00–18:00. El préstamo debe durar al menos una hora. La solicitud quedará pendiente hasta la aprobación de un inspector.</p><div className="modal-actions"><Button variant="secondary" type="button" onClick={() => setShowRequest(false)}>Cancelar</Button><Button type="submit" loading={saving} disabled={overdue}>Enviar solicitud</Button></div></form> : <div className="drawer-unavailable"><p>{technician ? "Este activo no está disponible para una nueva solicitud." : "Consulta el estado de este activo en el catálogo."}</p><Button variant="secondary" type="button" onClick={() => setShowRequest(false)}>Cerrar detalle</Button></div>}
             </motion.section>
           </motion.div>
         </ModalPortal>

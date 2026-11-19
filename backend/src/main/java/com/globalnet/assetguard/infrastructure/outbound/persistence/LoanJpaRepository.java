@@ -67,9 +67,11 @@ public interface LoanJpaRepository extends JpaRepository<LoanEntity, Long> {
     @Query(value = """
         select coalesce(sum(asset.estimated_value), 0)
         from assets asset
-        where asset.id in (
-        select distinct loan.asset_id from loans loan
-        where loan.return_condition in ('DAMAGED', 'LOST')
+        where asset.status = 'LOST'
+          and asset.id in (
+            select distinct loan.asset_id from loans loan
+            where loan.return_condition = 'LOST'
+              and loan.id not in (select report.loan_id from lost_asset_reports report where report.loan_id is not null)
               and (CAST(:startDate AS timestamp) is null or loan.return_date_time >= CAST(:startDate AS timestamp))
               and (CAST(:endDate AS timestamp) is null or loan.return_date_time <= CAST(:endDate AS timestamp))
         )

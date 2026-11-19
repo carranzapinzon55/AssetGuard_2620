@@ -10,8 +10,10 @@ import com.globalnet.assetguard.domain.ports.output.AssetRepositoryPort;
 import com.globalnet.assetguard.domain.ports.output.LoanRepositoryPort;
 import com.globalnet.assetguard.domain.ports.output.MaintenanceRecordRepositoryPort;
 import com.globalnet.assetguard.domain.ports.output.UserRepositoryPort;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.NoSuchElementException;
@@ -65,13 +67,41 @@ public class LoanUseCase {
             throw new IllegalArgumentException("Due date must not be before start date");
         }
 
-        String sTime = (startTime != null && !startTime.isBlank()) ? startTime : "08:00";
-        String eTime = (endTime != null && !endTime.isBlank()) ? endTime : "18:00";
-        java.time.LocalTime parsedStartTime = java.time.LocalTime.parse(sTime);
-        java.time.LocalTime parsedEndTime = java.time.LocalTime.parse(eTime);
+        LocalTime parsedStartTime;
+        if (startTime != null && !startTime.isBlank()) {
+            parsedStartTime = LocalTime.parse(startTime);
+        } else if (effectiveStartDate.isEqual(today)) {
+            parsedStartTime = LocalTime.now();
+        } else {
+            parsedStartTime = LocalTime.of(8, 0);
+        }
 
+        LocalTime parsedEndTime;
+        if (endTime != null && !endTime.isBlank()) {
+            parsedEndTime = LocalTime.parse(endTime);
+        } else if (dueDate.isEqual(effectiveStartDate)) {
+            parsedEndTime = parsedStartTime.plusHours(1);
+        } else {
+            parsedEndTime = LocalTime.of(18, 0);
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime marginNow = now.minusMinutes(2);
+
+        LocalDateTime startDateTime = effectiveStartDate.atTime(parsedStartTime);
+        LocalDateTime dueDateTime = dueDate.atTime(parsedEndTime);
+
+        if (startDateTime.isBefore(marginNow)) {
+            throw new IllegalArgumentException("Start date and time must not be in the past");
+        }
+        if (dueDateTime.isBefore(marginNow)) {
+            throw new IllegalArgumentException("Due date and time must not be in the past");
+        }
+        if (dueDateTime.isBefore(startDateTime)) {
+            throw new IllegalArgumentException("Due date and time must be after start date and time");
+        }
         if (dueDate.isEqual(effectiveStartDate)) {
-            long minutes = java.time.Duration.between(parsedStartTime, parsedEndTime).toMinutes();
+            long minutes = Duration.between(startDateTime, dueDateTime).toMinutes();
             if (minutes < 60) {
                 throw new IllegalArgumentException("Loan duration must be at least 1 hour");
             }
@@ -96,8 +126,6 @@ public class LoanUseCase {
         if (available <= 0) {
             throw new IllegalStateException("Asset is not available for loan");
         }
-
-        LocalDateTime startDateTime = effectiveStartDate.atTime(parsedStartTime);
 
         Loan loan = Loan.builder()
                 .user(user)

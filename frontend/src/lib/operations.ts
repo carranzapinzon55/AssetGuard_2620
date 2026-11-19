@@ -23,7 +23,7 @@ export const ASSETS_QUERY = `
 `;
 
 export const ASSETS_CATALOG_QUERY = `
-  query AssetCatalog($limit: Int = 50) {
+  query AssetCatalog($limit: Int = 50000) {
     assets(limit: $limit) { id serialNumber model status stockQuantity availableQuantity }
   }
 `;
@@ -168,7 +168,7 @@ export const AUDIT_QUERY = `
 export const DASHBOARD_QUERY = `
   query DashboardMetrics($startDate: String, $endDate: String) {
     dashboardMetrics(startDate: $startDate, endDate: $endDate) {
-      estimatedLossValue maintenanceCostsValue onTimeReturnPercentage assetsCurrentlyInField
+      estimatedLossValue maintenanceCostsValue totalEconomicLoss onTimeReturnPercentage assetsCurrentlyInField
       totalAssets availableAssets assetsUnderMaintenance lostAssets
       assetsByModel { model total available }
     }

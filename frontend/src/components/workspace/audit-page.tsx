@@ -7,13 +7,12 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { useAuth } from "@/components/auth-provider";
 import { Combobox } from "@/components/workspace/combobox";
-import { AUDIT_QUERY, AUDIT_TECHNICIANS_QUERY, USERS_QUERY } from "@/lib/operations";
+import { AUDIT_QUERY, USERS_QUERY } from "@/lib/operations";
 import { Button, CopyButton, DataTable, EmptyState, Feedback, FormField, InsightCard, LoadingRows, PageTitle, PaginationControls, SelectInput, StatusTag, TextInput } from "@/components/workspace/ui";
 import { statusLabel } from "@/lib/localization";
 import { errorMessage, queryGraphQL, type LoanItem, type UserItem } from "@/lib/workspace";
 
 type AuditResult = { auditLogs: { loans: LoanItem[]; totalElements: number; page: number; limit: number; totalPages: number } };
-type AuditTechnicianLoans = { loans: Array<{ user: (UserItem & { role: string }) | null }> };
 type UsersResult = { users: UserItem[] };
 const allowedLimits = [10, 25, 50] as const;
 
@@ -76,28 +75,34 @@ export function AuditPage() {
   useEffect(() => {
     if (!session) return;
     let active = true;
-    const request = session.user.role === "ADMIN"
-      ? queryGraphQL<UsersResult>(USERS_QUERY, { limit: 50 }).then((result) => result.users)
-      : queryGraphQL<AuditTechnicianLoans>(AUDIT_TECHNICIANS_QUERY).then(({ loans }) => {
-          const uniqueUsers = new Map<string, UserItem>();
-          loans.forEach(({ user }) => {
-            if (user?.role === "TECHNICIAN" && user.status) uniqueUsers.set(user.id, user);
-          });
-          return [...uniqueUsers.values()];
-        });
-    request.then((users) => {
-      if (active) setTechnicians(users.filter((user) => user.role === "TECHNICIAN" && user.status));
-    }).catch((requestError: unknown) => {
-      if (active) setError(errorMessage(requestError));
-    });
+    queryGraphQL<UsersResult>(USERS_QUERY, { limit: 5000 })
+      .then((result) => {
+        if (active) {
+          const technicianUsers = (result.users || [])
+            .filter((user) => user.role === "TECHNICIAN")
+            .sort((a, b) => (a.fullName || a.email).localeCompare(b.fullName || b.email));
+          setTechnicians(technicianUsers);
+        }
+      })
+      .catch((requestError: unknown) => {
+        if (active) setError(errorMessage(requestError));
+      });
     return () => { active = false; };
   }, [session]);
+
+  const technicianOptions = useMemo(() => [
+    { value: "", label: "Todos los técnicos" },
+    ...technicians.map((technician) => ({
+      value: String(technician.id),
+      label: technician.fullName ? `${technician.fullName} (${technician.email})` : technician.email,
+    })),
+  ], [technicians]);
 
   useEffect(() => {
     let active = true;
     queryGraphQL<AuditResult>(AUDIT_QUERY, {
       serialNumber: applied.serialNumber.trim() || null,
-      technicianId: applied.technicianId || null,
+      technicianId: applied.technicianId ? Number(applied.technicianId) : null,
       startDate: applied.startDate || null,
       endDate: applied.endDate || null,
       status: applied.status || null,
@@ -169,7 +174,16 @@ export function AuditPage() {
       <section className="work-section">
         <form className="audit-filter-grid" onSubmit={applyFilters}>
           <FormField label="Número de serie"><TextInput value={filters.serialNumber} onChange={(event) => setFilters({ ...filters, serialNumber: event.target.value })} placeholder="AG-0000" /></FormField>
-          <FormField label="Técnico"><Combobox value={filters.technicianId} onValueChange={(technicianId) => setFilters({ ...filters, technicianId })} options={[{ value: "", label: "Todos los técnicos" }, ...technicians.map((technician) => ({ value: technician.id, label: technician.fullName || technician.email }))]} placeholder="Todos los técnicos" searchPlaceholder="Buscar técnico" emptyMessage="No se encontraron técnicos." /></FormField>
+          <FormField label="Técnico">
+            <Combobox
+              value={filters.technicianId}
+              onValueChange={(technicianId) => setFilters({ ...filters, technicianId })}
+              options={technicianOptions}
+              placeholder="Todos los técnicos"
+              searchPlaceholder="Buscar técnico"
+              emptyMessage="No se encontraron técnicos."
+            />
+          </FormField>
           <FormField label="Desde"><TextInput type="date" max={filters.endDate && filters.endDate < today ? filters.endDate : today} value={filters.startDate} onChange={(event) => { setFilters({ ...filters, startDate: event.target.value }); if (event.target.value) endDateRef.current?.focus(); }} /></FormField>
           <FormField label="Hasta"><TextInput inputRef={endDateRef} type="date" min={filters.startDate || undefined} max={today} value={filters.endDate} onChange={(event) => { setFilters({ ...filters, endDate: event.target.value }); if (event.target.value) statusRef.current?.focus(); }} /></FormField>
           <FormField label="Estado"><SelectInput selectRef={statusRef} value={filters.status} onChange={(event) => setFilters({ ...filters, status: event.target.value })}><option value="">Todos</option><option value="PENDING">Pendiente</option><option value="APPROVED">Aprobado</option><option value="REJECTED">Rechazado</option><option value="RETURNED">Devuelto</option></SelectInput></FormField>

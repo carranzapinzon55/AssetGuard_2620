@@ -19,7 +19,7 @@ public class UserGraphQLController {
     }
 
     @QueryMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'INSPECTOR')")
     public List<GraphQLViews.UserView> users(@Argument Integer limit) {
         int normalizedLimit = normalizeLimit(limit);
         return registerUserUseCase.findAll().stream()
@@ -64,8 +64,8 @@ public class UserGraphQLController {
 
     private int normalizeLimit(Integer limit) {
         int value = limit == null ? 10 : limit;
-        if (value < 1 || value > 200) {
-            throw new IllegalArgumentException("limit must be between 1 and 200");
+        if (value < 1 || value > 50000) {
+            throw new IllegalArgumentException("limit must be between 1 and 50000");
         }
         return value;
     }

@@ -438,7 +438,34 @@ export function MaintenancePage() {
           </div>
         </div>
         <div id="maintenance-history-panel" hidden={!historyExpanded}>
-          {loading ? <LoadingRows label="Cargando historial" /> : sortedHistoryRecords.length === 0 ? <EmptyState title="Sin intervenciones registradas" detail="Cuando se inicie una intervención, aparecerá aquí su historial." /> : <DataTable headings={["Activo", "Motivo", "Inicio", "Cierre", "Estado actual"]}>{visibleHistoryRecords.map((record) => <tr key={record.id}><td><span className="copy-value"><span className="mono-cell telemetry-value font-mono">{record.asset.serialNumber}</span><CopyButton text={record.asset.serialNumber} label={`Copiar serie ${record.asset.serialNumber}`} /></span><small className="table-secondary id-copy-line font-mono">ID <span>{record.id}</span><CopyButton className="inline-copy" text={record.id} label={`Copiar ID del mantenimiento de ${record.asset.serialNumber}`} /></small></td><td>{record.reason || "—"}</td><td className="telemetry-value font-mono">{record.startDate || "—"}</td><td className="telemetry-value font-mono">{record.endDate || "En curso"}</td><td><StatusTag value={record.asset.status} /></td></tr>)}</DataTable>}
+          {loading ? (
+            <LoadingRows label="Cargando historial" />
+          ) : sortedHistoryRecords.length === 0 ? (
+            <EmptyState title="Sin intervenciones registradas" detail="Cuando se inicie una intervención, aparecerá aquí su historial." />
+          ) : (
+            <DataTable headings={["Activo", "Motivo", "Proveedor", "Inicio", "Cierre", "Costo", "Estado actual"]}>
+              {visibleHistoryRecords.map((record) => (
+                <tr key={record.id}>
+                  <td>
+                    <span className="copy-value">
+                      <span className="mono-cell telemetry-value font-mono">{record.asset.serialNumber}</span>
+                      <CopyButton text={record.asset.serialNumber} label={`Copiar serie ${record.asset.serialNumber}`} />
+                    </span>
+                    <small className="table-secondary id-copy-line font-mono">
+                      ID <span>{record.id}</span>
+                      <CopyButton className="inline-copy" text={record.id} label={`Copiar ID del mantenimiento de ${record.asset.serialNumber}`} />
+                    </small>
+                  </td>
+                  <td>{record.reason || "—"}</td>
+                  <td>{record.providerName || "—"}</td>
+                  <td className="telemetry-value font-mono">{record.startDate || "—"}</td>
+                  <td className="telemetry-value font-mono">{record.endDate || "En curso"}</td>
+                  <td>{record.cost == null ? "—" : <CurrencyDisplay usdAmount={record.cost} />}</td>
+                  <td><StatusTag value={record.asset.status} /></td>
+                </tr>
+              ))}
+            </DataTable>
+          )}
           <PaginationControls currentPage={historyPage} totalItems={sortedHistoryRecords.length} pageSize={historyPageSize} onPageChange={setHistoryPage} onPageSizeChange={(size) => { setHistoryPageSize(size); setHistoryPage(0); }} loading={loading} itemLabel="intervenciones" />
         </div>
       </section>

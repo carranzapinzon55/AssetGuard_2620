@@ -132,6 +132,32 @@ public final class GraphQLViews {
         }
     }
 
+    public record DashboardMetricsView(
+            Double estimatedLossValue,
+            Double maintenanceCostsValue,
+            Double totalEconomicLoss,
+            Double onTimeReturnPercentage,
+            Integer assetsCurrentlyInField,
+            Integer totalAssets,
+            Integer availableAssets,
+            Integer assetsUnderMaintenance,
+            Integer lostAssets,
+            java.util.List<com.globalnet.assetguard.domain.model.AssetModelMetrics> assetsByModel) {
+        public static DashboardMetricsView from(com.globalnet.assetguard.domain.model.LoanDashboardMetrics metrics) {
+            return metrics == null ? null : new DashboardMetricsView(
+                    metrics.estimatedLossValue() == null ? 0.0 : metrics.estimatedLossValue().doubleValue(),
+                    metrics.maintenanceCostsValue() == null ? 0.0 : metrics.maintenanceCostsValue().doubleValue(),
+                    metrics.totalEconomicLoss() == null ? 0.0 : metrics.totalEconomicLoss().doubleValue(),
+                    metrics.onTimeReturnPercentage(),
+                    (int) metrics.assetsCurrentlyInField(),
+                    (int) metrics.totalAssets(),
+                    (int) metrics.availableAssets(),
+                    (int) metrics.assetsUnderMaintenance(),
+                    (int) metrics.lostAssets(),
+                    metrics.assetsByModel());
+        }
+    }
+
     public record LostAssetReportView(
             Long id,
             AssetView asset,

@@ -8,6 +8,7 @@ import com.globalnet.assetguard.domain.model.User;
 import com.globalnet.assetguard.domain.ports.output.LoanRepositoryPort;
 import com.globalnet.assetguard.infrastructure.outbound.persistence.AssetJpaRepository;
 import com.globalnet.assetguard.infrastructure.outbound.persistence.LoanJpaRepository;
+import com.globalnet.assetguard.infrastructure.outbound.persistence.LostAssetReportJpaRepository;
 import com.globalnet.assetguard.infrastructure.outbound.persistence.MaintenanceRecordJpaRepository;
 import com.globalnet.assetguard.infrastructure.outbound.persistence.UserEntity;
 import com.globalnet.assetguard.infrastructure.outbound.persistence.entity.AssetEntity;
@@ -27,14 +28,17 @@ public class LoanPersistenceAdapter implements LoanRepositoryPort {
     private final LoanJpaRepository loanJpaRepository;
     private final AssetJpaRepository assetJpaRepository;
     private final MaintenanceRecordJpaRepository maintenanceRecordJpaRepository;
+    private final LostAssetReportJpaRepository lostAssetReportJpaRepository;
 
     public LoanPersistenceAdapter(
             LoanJpaRepository loanJpaRepository,
             AssetJpaRepository assetJpaRepository,
-            MaintenanceRecordJpaRepository maintenanceRecordJpaRepository) {
+            MaintenanceRecordJpaRepository maintenanceRecordJpaRepository,
+            LostAssetReportJpaRepository lostAssetReportJpaRepository) {
         this.loanJpaRepository = loanJpaRepository;
         this.assetJpaRepository = assetJpaRepository;
         this.maintenanceRecordJpaRepository = maintenanceRecordJpaRepository;
+        this.lostAssetReportJpaRepository = lostAssetReportJpaRepository;
     }
 
     @Override
@@ -114,9 +118,18 @@ public class LoanPersistenceAdapter implements LoanRepositoryPort {
                 Optional.ofNullable(maintenanceRecordJpaRepository.sumCostsForStartDateRange(start, end))
                         .orElse(0.0));
         long availableAssets = assetJpaRepository.countByStatusIn(List.of("AVAILABLE"));
+
+        java.math.BigDecimal loanLoss = Optional.ofNullable(loanJpaRepository.sumEstimatedLossValue(startDate, endDate))
+                .orElse(java.math.BigDecimal.ZERO);
+        java.math.BigDecimal reportLoss = Optional.ofNullable(lostAssetReportJpaRepository.sumEstimatedLossValue(startDate, endDate))
+                .orElse(java.math.BigDecimal.ZERO);
+        java.math.BigDecimal totalEstimatedLoss = loanLoss.add(reportLoss);
+        java.math.BigDecimal totalEconomicLoss = totalEstimatedLoss.add(maintenanceCosts);
+
         return new LoanDashboardMetrics(
-            loanJpaRepository.sumEstimatedLossValue(startDate, endDate),
+            totalEstimatedLoss,
             maintenanceCosts,
+            totalEconomicLoss,
             Optional.ofNullable(loanJpaRepository.onTimeReturnPercentage(startDate, endDate)).orElse(0.0),
             assetJpaRepository.countByStatusIn(List.of("LOANED", "ON_LOAN")),
             assetJpaRepository.count(),

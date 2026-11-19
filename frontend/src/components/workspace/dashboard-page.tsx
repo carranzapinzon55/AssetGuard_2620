@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type PointerEvent } from "react";
-import { Activity, AlertTriangle, CalendarDays, PackageCheck, RotateCcw, Search, Wrench } from "lucide-react";
+import { Activity, AlertTriangle, CalendarDays, PackageCheck, RotateCcw, Search, TrendingDown, Wrench } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import { Button, CopyButton, CurrencyDisplay, Dialog, EmptyState, Feedback, FormField, InsightCard, LoadingRows, PageTitle, SelectInput, StatusTag, TextInput } from "@/components/workspace/ui";
 import { LostReportsBanner, LostReportsBell } from "@/components/workspace/lost-reports-dialog";
@@ -11,6 +11,7 @@ import { errorMessage, queryGraphQL, type AssetItem } from "@/lib/workspace";
 type Metrics = {
   estimatedLossValue: number;
   maintenanceCostsValue: number;
+  totalEconomicLoss: number;
   onTimeReturnPercentage: number;
   assetsCurrentlyInField: number;
   totalAssets: number;
@@ -20,7 +21,7 @@ type Metrics = {
   assetsByModel: Array<{ model: string; total: number; available: number }>;
 };
 type MetricsResult = { dashboardMetrics: Metrics };
-type MetricKey = "loss" | "maintenance" | "onTime" | "inField";
+type MetricKey = "loss" | "maintenance" | "totalLoss" | "onTime" | "inField";
 
 function getLocalTodayIso(): string {
   const now = new Date();
@@ -61,7 +62,7 @@ export function DashboardPage() {
         startDate: appliedRange.startDate || null,
         endDate: appliedRange.endDate || null,
       }),
-      queryGraphQL<{ assets: AssetItem[] }>(ASSETS_CATALOG_QUERY, { limit: 200 }),
+      queryGraphQL<{ assets: AssetItem[] }>(ASSETS_CATALOG_QUERY, { limit: 5000 }),
     ])
       .then(([metricsRes, assetsRes]) => {
         if (active) {
@@ -79,10 +80,10 @@ export function DashboardPage() {
   const metricDetails = selectedMetric ? {
     loss: {
       eyebrow: "MERMAS · PERIODO",
-      title: "Mermas por pérdida o daño",
+      title: "Mermas por activos perdidos o dados de baja",
       value: metrics ? <CurrencyDisplay usdAmount={metrics.estimatedLossValue} /> : "—",
-      summary: "Valor estimado de activos reportados como perdidos o dañados en el periodo.",
-      note: "El rango aplicado filtra las devoluciones por su fecha de registro; sin rango, muestra el total histórico de activos marcados como perdidos o dañados.",
+      summary: "Valor estimado de activos perdidos o dados de baja en el periodo.",
+      note: "El rango aplicado filtra los reportes de pérdida y préstamos no recuperados por su fecha; no incluye equipos en mantenimiento técnico.",
     },
     maintenance: {
       eyebrow: "MANTENIMIENTO · PERIODO",
@@ -90,6 +91,29 @@ export function DashboardPage() {
       value: metrics ? <CurrencyDisplay usdAmount={metrics.maintenanceCostsValue} /> : "—",
       summary: "Suma de los costos registrados en órdenes de mantenimiento.",
       note: "El rango aplicado filtra los costos por la fecha de inicio de la intervención; sin rango, muestra el total histórico registrado.",
+    },
+    totalLoss: {
+      eyebrow: "IMPACTO FINANCIERO · PERIODO",
+      title: "Pérdida económica total",
+      value: metrics ? <CurrencyDisplay usdAmount={metrics.totalEconomicLoss} /> : "—",
+      summary: "Impacto económico consolidado: Mermas por activos perdidos o dados de baja + Costos de mantenimiento.",
+      breakdown: metrics ? (
+        <div className="total-loss-breakdown my-3 space-y-2 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/40 p-3 text-xs">
+          <div className="flex justify-between items-center text-slate-700 dark:text-slate-300">
+            <span>Mermas (activos perdidos / baja):</span>
+            <span className="font-mono font-semibold"><CurrencyDisplay usdAmount={metrics.estimatedLossValue} /></span>
+          </div>
+          <div className="flex justify-between items-center text-slate-700 dark:text-slate-300">
+            <span>Costos de mantenimiento:</span>
+            <span className="font-mono font-semibold"><CurrencyDisplay usdAmount={metrics.maintenanceCostsValue} /></span>
+          </div>
+          <div className="flex justify-between items-center pt-2 border-t border-slate-200 dark:border-slate-800 font-bold text-slate-900 dark:text-slate-100">
+            <span>Pérdida económica consolidada:</span>
+            <span className="font-mono text-rose-600 dark:text-rose-400 font-bold"><CurrencyDisplay usdAmount={metrics.totalEconomicLoss} /></span>
+          </div>
+        </div>
+      ) : null,
+      note: "Consolidación financiera que suma el costo total de los activos declarados como merma o baja definitiva más las facturas de intervención y reparación técnica en el periodo seleccionado.",
     },
     onTime: {
       eyebrow: "PUNTUALIDAD · PERIODO",
@@ -253,10 +277,115 @@ export function DashboardPage() {
       </section>
       {loading ? <LoadingRows label="Calculando métricas" /> : !metrics ? <EmptyState title="No hay métricas disponibles" detail="No se encontraron datos para el periodo seleccionado." /> : <>
         <section className="metric-grid">
-          <button type="button" className="metric-panel loss" aria-label="Ver detalle de mermas por pérdida o daño" aria-haspopup="dialog" onClick={() => setSelectedMetric("loss")} onPointerMove={updateMetricSpotlight}><div className="metric-panel-top"><span className="metric-icon"><AlertTriangle size={17} /></span><span className="work-eyebrow">MERMAS · PERIODO</span></div><strong className="metric-value telemetry-value"><CurrencyDisplay usdAmount={metrics.estimatedLossValue} /></strong><p>Valor estimado de activos perdidos o dañados.</p><div className="metric-signal" aria-hidden="true"><i /><i /><i /><i /><i /><i /><i /><i /></div><div className="metric-foot"><span>PÉRDIDA + DAÑO</span><span>VER DESGLOSE <span aria-hidden="true">↗</span></span></div></button>
-          <button type="button" className="metric-panel maintenance-cost" aria-label="Ver detalle de gastos de mantenimiento" aria-haspopup="dialog" onClick={() => setSelectedMetric("maintenance")} onPointerMove={updateMetricSpotlight}><div className="metric-panel-top"><span className="metric-icon"><Wrench size={17} /></span><span className="work-eyebrow">MANTENIMIENTO · PERIODO</span></div><strong className="metric-value telemetry-value"><CurrencyDisplay usdAmount={metrics.maintenanceCostsValue} /></strong><p>Costos registrados en órdenes de mantenimiento.</p><div className="metric-signal field-signal" aria-hidden="true"><i /><i /><i /><i /><i /><i /><i /><i /></div><div className="metric-foot"><span>COSTOS DE INTERVENCIÓN</span><span>VER DESGLOSE <span aria-hidden="true">↗</span></span></div></button>
-          <button type="button" className="metric-panel" aria-label="Ver detalle de devoluciones puntuales" aria-haspopup="dialog" onClick={() => setSelectedMetric("onTime")} onPointerMove={updateMetricSpotlight}><div className="metric-panel-top"><span className="metric-icon"><RotateCcw size={17} /></span><span className="work-eyebrow">PUNTUALIDAD · PERIODO</span></div><strong className="metric-value telemetry-value">{punctuality.toFixed(1)}<small>%</small></strong><p>Préstamos devueltos en o antes de su vencimiento.</p><div className="metric-progress"><span style={{ width: `${punctuality}%` }} /></div><div className="metric-foot"><span>DEVOLUCIONES A TIEMPO</span><strong className="telemetry-value">{punctuality.toFixed(0)}%</strong></div></button>
-          <button type="button" className="metric-panel field" aria-label="Ver detalle de activos actualmente en campo" aria-haspopup="dialog" onClick={() => setSelectedMetric("inField")} onPointerMove={updateMetricSpotlight}><div className="metric-panel-top"><span className="metric-icon"><PackageCheck size={17} /></span><span className="work-eyebrow">CUSTODIA · ACTUAL</span></div><strong className="metric-value telemetry-value">{metrics.assetsCurrentlyInField}</strong><p>Activos actualmente asignados en préstamo.</p><div className="metric-signal field-signal" aria-hidden="true"><i /><i /><i /><i /><i /><i /><i /><i /></div><div className="metric-foot"><span>ESTADO ACTUAL DE LA FLOTA</span><span>VER DETALLE <span aria-hidden="true">↗</span></span></div></button>
+          <button
+            type="button"
+            className="metric-panel loss"
+            aria-label="Ver detalle de mermas por activos perdidos o dados de baja"
+            aria-haspopup="dialog"
+            onClick={() => setSelectedMetric("loss")}
+            onPointerMove={updateMetricSpotlight}
+          >
+            <div className="metric-panel-top">
+              <span className="metric-icon"><AlertTriangle size={17} /></span>
+              <span className="work-eyebrow">MERMAS · PERIODO</span>
+            </div>
+            <strong className="metric-value telemetry-value">
+              <CurrencyDisplay usdAmount={metrics.estimatedLossValue} />
+            </strong>
+            <p>Valor estimado de activos perdidos o dados de baja.</p>
+            <div className="metric-signal" aria-hidden="true">
+              <i /><i /><i /><i /><i /><i /><i /><i />
+            </div>
+            <div className="metric-foot">
+              <span>ACTIVOS PERDIDOS / BAJA</span>
+              <span>VER DESGLOSE <span aria-hidden="true">↗</span></span>
+            </div>
+          </button>
+          <button
+            type="button"
+            className="metric-panel maintenance-cost"
+            aria-label="Ver detalle de gastos de mantenimiento"
+            aria-haspopup="dialog"
+            onClick={() => setSelectedMetric("maintenance")}
+            onPointerMove={updateMetricSpotlight}
+          >
+            <div className="metric-panel-top">
+              <span className="metric-icon"><Wrench size={17} /></span>
+              <span className="work-eyebrow">MANTENIMIENTO · PERIODO</span>
+            </div>
+            <strong className="metric-value telemetry-value">
+              <CurrencyDisplay usdAmount={metrics.maintenanceCostsValue} />
+            </strong>
+            <p>Costos registrados en órdenes de mantenimiento.</p>
+            <div className="metric-signal field-signal" aria-hidden="true">
+              <i /><i /><i /><i /><i /><i /><i /><i />
+            </div>
+            <div className="metric-foot">
+              <span>COSTOS DE INTERVENCIÓN</span>
+              <span>VER DESGLOSE <span aria-hidden="true">↗</span></span>
+            </div>
+          </button>
+          <button
+            type="button"
+            className="metric-panel total-loss"
+            aria-label="Ver detalle de pérdida económica total"
+            aria-haspopup="dialog"
+            onClick={() => setSelectedMetric("totalLoss")}
+            onPointerMove={updateMetricSpotlight}
+          >
+            <div className="metric-panel-top">
+              <span className="metric-icon"><TrendingDown size={17} /></span>
+              <span className="work-eyebrow">PÉRDIDA ECONÓMICA TOTAL</span>
+            </div>
+            <strong className="metric-value telemetry-value">
+              <CurrencyDisplay usdAmount={metrics.totalEconomicLoss} />
+            </strong>
+            <p>Mermas por pérdidas + Costos de mantenimiento.</p>
+            <div className="metric-signal total-loss-signal" aria-hidden="true">
+              <i /><i /><i /><i /><i /><i /><i /><i />
+            </div>
+            <div className="metric-foot">
+              <span>CONSOLIDADO FINANCIERO</span>
+              <span>VER DESGLOSE <span aria-hidden="true">↗</span></span>
+            </div>
+          </button>
+          <button
+            type="button"
+            className="metric-panel"
+            aria-label="Ver detalle de devoluciones puntuales"
+            aria-haspopup="dialog"
+            onClick={() => setSelectedMetric("onTime")}
+            onPointerMove={updateMetricSpotlight}
+          >
+            <div className="metric-panel-top">
+              <span className="metric-icon"><RotateCcw size={17} /></span>
+              <span className="work-eyebrow">PUNTUALIDAD · PERIODO</span>
+            </div>
+            <strong className="metric-value telemetry-value">{punctuality.toFixed(1)}<small>%</small></strong>
+            <p>Préstamos devueltos en o antes de su vencimiento.</p>
+            <div className="metric-progress"><span style={{ width: `${punctuality}%` }} /></div>
+            <div className="metric-foot">
+              <span>DEVOLUCIONES A TIEMPO</span>
+              <strong className="telemetry-value">{punctuality.toFixed(0)}%</strong>
+            </div>
+          </button>
+          <button
+            type="button"
+            className="metric-panel field"
+            aria-label="Ver detalle de activos actualmente en campo"
+            aria-haspopup="dialog"
+            onClick={() => setSelectedMetric("inField")}
+            onPointerMove={updateMetricSpotlight}
+          >
+            <div className="metric-panel-top">
+              <span className="metric-icon"><PackageCheck size={17} /></span>
+              <span className="work-eyebrow">CUSTODIA · ACTUAL</span>
+            </div>
+            <strong className="metric-value telemetry-value">{metrics.assetsCurrentlyInField}</strong>
+            <p>Activos actualmente asignados en préstamo.</p>
+            <div className="metric-signal field-signal" aria-hidden="true"><i /><i /><i /><i /><i /><i /><i /><i /></div>
+            <div className="metric-foot"><span>ESTADO ACTUAL DE LA FLOTA</span><span>VER DETALLE <span aria-hidden="true">↗</span></span></div>
+          </button>
         </section>
         <section className="dashboard-inventory" aria-label="Indicadores del inventario actual">
           <div className="section-toolbar"><div className="toolbar-title"><PackageCheck size={17} /><strong>Inventario actual</strong><span>{metrics.totalAssets}</span></div><span className="toolbar-note">ESTADO DE LA FLOTA · ACTUAL</span></div>
@@ -340,14 +469,17 @@ export function DashboardPage() {
         </section>
         <section className="dashboard-detail-band"><div><span className="work-eyebrow">INDICADOR DE ENTREGA</span><h2>Devoluciones puntuales</h2><p>Porcentaje calculado sobre préstamos cerrados en el periodo seleccionado.</p></div><div className="delivery-visual"><div className="delivery-value">{punctuality.toFixed(0)}<small>%</small></div><div className="delivery-bars"><span style={{ height: `${Math.max(4, punctuality)}%` }} /><span style={{ height: `${Math.max(4, 100 - punctuality)}%` }} /></div><div className="delivery-legend"><span><i className="legend-good" /> A tiempo</span><span><i className="legend-late" /> Fuera de plazo</span></div></div></section>
       </>}
-      {metricDetails && <Dialog open title={metricDetails.title} eyebrow={metricDetails.eyebrow} onClose={() => setSelectedMetric(null)}>
-        <div className="metric-detail">
-          <strong className="metric-detail-value telemetry-value">{metricDetails.value}</strong>
-          <p>{metricDetails.summary}</p>
-          {selectedMetric === "onTime" && <div className="metric-progress detail-progress"><span style={{ width: `${punctuality}%` }} /></div>}
-          <div className="metric-detail-note"><span className="work-eyebrow">LECTURA DEL INDICADOR</span><p>{metricDetails.note}</p></div>
-        </div>
-      </Dialog>}
+      {metricDetails && (
+        <Dialog open title={metricDetails.title} eyebrow={metricDetails.eyebrow} onClose={() => setSelectedMetric(null)}>
+          <div className="metric-detail">
+            <strong className="metric-detail-value telemetry-value">{metricDetails.value}</strong>
+            <p>{metricDetails.summary}</p>
+            {"breakdown" in metricDetails && metricDetails.breakdown}
+            {selectedMetric === "onTime" && <div className="metric-progress detail-progress"><span style={{ width: `${punctuality}%` }} /></div>}
+            <div className="metric-detail-note"><span className="work-eyebrow">LECTURA DEL INDICADOR</span><p>{metricDetails.note}</p></div>
+          </div>
+        </Dialog>
+      )}
       {selectedModelData && (
         <Dialog
           open

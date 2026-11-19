@@ -109,6 +109,7 @@ type LoanAuditPage {
 type LoanDashboardMetrics {
     estimatedLossValue: Float!
     maintenanceCostsValue: Float!
+    totalEconomicLoss: Float!
     onTimeReturnPercentage: Float!
     assetsCurrentlyInField: Int!
     totalAssets: Int!

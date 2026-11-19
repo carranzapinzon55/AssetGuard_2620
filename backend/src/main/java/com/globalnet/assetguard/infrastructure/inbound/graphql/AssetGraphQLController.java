@@ -225,11 +225,13 @@ public class AssetGraphQLController {
     public record BulkUploadPayload(int importedCount, List<GraphQLViews.AssetView> assets) {
     }
 
-    private int normalizeLimit(Integer limit) {
-        int value = limit == null ? 50 : limit;
-        if (value < 1 || value > 200) {
-            throw new IllegalArgumentException("limit must be between 1 and 200");
-        }
-        return value;
+   private int normalizeLimit(Integer limit) {
+    if (limit == null) {
+        return 5000;
     }
+    if (limit < 1 || limit > 50000) {
+        throw new IllegalArgumentException("Invalid asset limit.");
+    }
+    return limit;
+}
 }

@@ -247,6 +247,43 @@ class LoanUseCaseTest {
     }
 
     @Test
+    void requestLoanRejectsStartTimeInThePast() {
+        LocalDate today = LocalDate.now();
+        if (java.time.LocalTime.now().isAfter(java.time.LocalTime.of(0, 10))) {
+            java.time.LocalTime pastTime = java.time.LocalTime.now().minusMinutes(10);
+            assertThrows(IllegalArgumentException.class,
+                    () -> loanUseCase.requestLoan(10L, 30L, today.plusDays(1), today, pastTime.toString().substring(0, 5), "18:00"));
+        }
+    }
+
+    @Test
+    void requestLoanRejectsDueTimeInThePast() {
+        LocalDate today = LocalDate.now();
+        if (java.time.LocalTime.now().isAfter(java.time.LocalTime.of(0, 10))) {
+            java.time.LocalTime pastTime = java.time.LocalTime.now().minusMinutes(10);
+            assertThrows(IllegalArgumentException.class,
+                    () -> loanUseCase.requestLoan(10L, 30L, today, today, pastTime.toString().substring(0, 5), pastTime.toString().substring(0, 5)));
+        }
+    }
+
+    @Test
+    void requestLoanAcceptsStartTimeWithinTwoMinutesMargin() {
+        when(userRepositoryPort.findById(10L)).thenReturn(Optional.of(technician));
+        when(loanRepositoryPort.findByUserId(10L)).thenReturn(java.util.List.of());
+        when(loanRepositoryPort.hasOverdueApprovedLoan(eq(10L), any())).thenReturn(false);
+        when(assetRepositoryPort.findById(30L)).thenReturn(Optional.of(availableAsset));
+        when(loanRepositoryPort.save(any(Loan.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        LocalDate today = LocalDate.now();
+        if (java.time.LocalTime.now().isAfter(java.time.LocalTime.of(0, 2))) {
+            java.time.LocalTime oneMinuteAgo = java.time.LocalTime.now().minusMinutes(1);
+            Loan loan = loanUseCase.requestLoan(10L, 30L, today.plusDays(1), today,
+                    oneMinuteAgo.toString().substring(0, 5), "18:00");
+            assertEquals(Loan.Status.PENDING, loan.getStatus());
+        }
+    }
+
+    @Test
     void approveLoanKeepsAssetAvailableWhenMultipleUnitsRemain() {
         Loan pendingLoan = pendingLoan();
         Asset multiUnitAsset = Asset.builder().id(30L).status("AVAILABLE").stockQuantity(5).availableQuantity(5).build();
