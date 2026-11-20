@@ -380,31 +380,49 @@ export function PaginationControls({
   );
 }
 
-export function InsightCard({ label, value, description, progress, detail }: {
+export function InsightCard({
+  label,
+  value,
+  description,
+  progress,
+  detail,
+  onClick,
+}: {
   label: string;
   value: string | number;
   description: string;
   progress: number;
   detail: string;
+  onClick?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const boundedProgress = Math.max(0, Math.min(100, progress));
 
   return (
     <>
-      <button className="insight-card" type="button" onClick={() => setOpen(true)} aria-haspopup="dialog">
+      <button
+        className="insight-card"
+        type="button"
+        onClick={() => {
+          if (onClick) onClick();
+          else setOpen(true);
+        }}
+        aria-haspopup="dialog"
+      >
         <span className="work-eyebrow">{label}</span>
         <strong className="insight-value telemetry-value">{value}</strong>
         <span className="insight-track" aria-hidden="true"><i style={{ width: `${boundedProgress}%` }} /></span>
         <span className="insight-description">{description}</span>
         <span className="insight-link">VER DESGLOSE ↗</span>
       </button>
-      <Dialog open={open} title={label} eyebrow="INDICADOR · RESUMEN" onClose={() => setOpen(false)}>
-        <div className="metric-detail">
-          <strong className="metric-detail-value telemetry-value">{value}</strong>
-          <p>{detail}</p>
-        </div>
-      </Dialog>
+      {!onClick && (
+        <Dialog open={open} title={label} eyebrow="INDICADOR · RESUMEN" onClose={() => setOpen(false)}>
+          <div className="metric-detail">
+            <strong className="metric-detail-value telemetry-value">{value}</strong>
+            <p>{detail}</p>
+          </div>
+        </Dialog>
+      )}
     </>
   );
 }
@@ -453,4 +471,161 @@ export function SelectInput(props: React.SelectHTMLAttributes<HTMLSelectElement>
 
 export function InlineActions({ children }: { children: ReactNode }) {
   return <div className="inline-actions">{children}</div>;
+}
+
+export type DonutSegment = {
+  label: string;
+  value: number;
+  color: string;
+  formattedValue?: ReactNode;
+};
+
+export function DonutChart({
+  segments,
+  centerValue,
+  centerLabel,
+}: {
+  segments: DonutSegment[];
+  centerValue?: ReactNode;
+  centerLabel?: string;
+}) {
+  const total = segments.reduce((sum, s) => sum + Math.max(0, s.value), 0);
+  const radius = 38;
+  const circumference = 2 * Math.PI * radius;
+
+  let accumulatedOffset = 0;
+
+  return (
+    <div className="donut-chart-container">
+      <div className="donut-svg-wrap">
+        <svg viewBox="0 0 100 100" className="w-full h-full">
+          <circle
+            cx="50"
+            cy="50"
+            r={radius}
+            fill="transparent"
+            stroke="currentColor"
+            className="text-slate-200 dark:text-slate-800"
+            strokeWidth="13"
+          />
+          {total > 0 &&
+            segments.map((seg, idx) => {
+              if (seg.value <= 0) return null;
+              const pct = seg.value / total;
+              const strokeDash = pct * circumference;
+              const currentOffset = accumulatedOffset;
+              accumulatedOffset += strokeDash;
+
+              return (
+                <circle
+                  key={idx}
+                  cx="50"
+                  cy="50"
+                  r={radius}
+                  fill="transparent"
+                  stroke={seg.color}
+                  strokeWidth="13"
+                  strokeDasharray={`${strokeDash} ${circumference - strokeDash}`}
+                  strokeDashoffset={-currentOffset}
+                  transform="rotate(-90 50 50)"
+                  style={{ transition: "stroke-dasharray 0.3s ease, stroke-dashoffset 0.3s ease" }}
+                />
+              );
+            })}
+        </svg>
+        {centerValue && (
+          <div className="donut-center-text">
+            <span className="donut-center-value">{centerValue}</span>
+            {centerLabel && <span className="donut-center-label">{centerLabel}</span>}
+          </div>
+        )}
+      </div>
+
+      <div className="chart-legend-grid">
+        {segments.map((seg, idx) => {
+          const pct = total > 0 ? (seg.value / total) * 100 : 0;
+          return (
+            <div key={idx} className="chart-legend-row">
+              <span className="chart-legend-left">
+                <span className="chart-legend-dot" style={{ backgroundColor: seg.color }} />
+                <span title={seg.label}>{seg.label}</span>
+              </span>
+              <span className="chart-legend-right">
+                <span>{seg.formattedValue ?? seg.value}</span>
+                <small className="text-slate-400 font-normal">({pct.toFixed(0)}%)</small>
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+export type BarChartItem = {
+  label: string;
+  value: number;
+  formattedValue?: ReactNode;
+  percentage?: number;
+  color?: string;
+};
+
+export function HorizontalBarChart({
+  items,
+  maxCount = 6,
+}: {
+  items: BarChartItem[];
+  maxCount?: number;
+}) {
+  const displayed = items.slice(0, maxCount);
+  const maxValue = Math.max(1, ...displayed.map((item) => item.value));
+
+  if (displayed.length === 0) {
+    return <p className="text-xs text-slate-400 py-3 text-center">No hay registros suficientes para graficar.</p>;
+  }
+
+  return (
+    <div className="bar-chart-list">
+      {displayed.map((item, idx) => {
+        const widthPct = Math.min(100, Math.max(4, (item.value / maxValue) * 100));
+        const color = item.color || "#10b981";
+        return (
+          <div key={idx} className="bar-chart-item">
+            <div className="bar-chart-header">
+              <span className="bar-chart-label" title={item.label}>
+                {item.label}
+              </span>
+              <span className="bar-chart-val flex items-center">
+                {item.formattedValue ?? item.value}
+                {item.percentage != null && (
+                  <small className="text-slate-400 font-normal ml-1.5">({item.percentage.toFixed(0)}%)</small>
+                )}
+              </span>
+            </div>
+            <div className="bar-chart-track" aria-hidden="true">
+              <div className="bar-chart-fill" style={{ width: `${widthPct}%`, backgroundColor: color }} />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+export function ModalKpiGrid({
+  items,
+}: {
+  items: Array<{ label: string; value: ReactNode; sub?: string }>;
+}) {
+  return (
+    <div className="modal-kpi-grid">
+      {items.map((item, idx) => (
+        <div key={idx} className="modal-kpi-card">
+          <span className="modal-kpi-label">{item.label}</span>
+          <strong className="modal-kpi-value telemetry-value font-mono">{item.value}</strong>
+          {item.sub && <span className="modal-kpi-sub">{item.sub}</span>}
+        </div>
+      ))}
+    </div>
+  );
 }

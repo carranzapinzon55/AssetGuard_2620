@@ -8,6 +8,7 @@
 /home/senaFactory/Desktop/AssetGuard_2620/backend/src/test/java/com/globalnet/assetguard/application/usecase/PasswordResetUseCaseTest.java
 /home/senaFactory/Desktop/AssetGuard_2620/backend/src/test/java/com/globalnet/assetguard/application/usecase/ProviderUseCaseTest.java
 /home/senaFactory/Desktop/AssetGuard_2620/backend/src/test/java/com/globalnet/assetguard/application/usecase/RegisterUserUseCaseTest.java
+/home/senaFactory/Desktop/AssetGuard_2620/backend/src/test/java/com/globalnet/assetguard/application/usecase/UserUseCaseTest.java
 /home/senaFactory/Desktop/AssetGuard_2620/backend/src/test/java/com/globalnet/assetguard/infrastructure/bootstrap/DefaultAdminInitializerTest.java
 /home/senaFactory/Desktop/AssetGuard_2620/backend/src/test/java/com/globalnet/assetguard/infrastructure/importer/ExcelCsvAssetImporterTest.java
 /home/senaFactory/Desktop/AssetGuard_2620/backend/src/test/java/com/globalnet/assetguard/infrastructure/inbound/graphql/GraphQLAuthorizationExceptionHandlerTest.java

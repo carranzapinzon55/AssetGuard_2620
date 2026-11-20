@@ -11,6 +11,7 @@
 /home/senaFactory/Desktop/AssetGuard_2620/backend/src/main/java/com/globalnet/assetguard/application/usecase/PasswordResetUseCase.java
 /home/senaFactory/Desktop/AssetGuard_2620/backend/src/main/java/com/globalnet/assetguard/application/usecase/ProviderUseCase.java
 /home/senaFactory/Desktop/AssetGuard_2620/backend/src/main/java/com/globalnet/assetguard/application/usecase/RegisterUserUseCase.java
+/home/senaFactory/Desktop/AssetGuard_2620/backend/src/main/java/com/globalnet/assetguard/application/usecase/UserUseCase.java
 /home/senaFactory/Desktop/AssetGuard_2620/backend/src/main/java/com/globalnet/assetguard/domain/model/Asset.java
 /home/senaFactory/Desktop/AssetGuard_2620/backend/src/main/java/com/globalnet/assetguard/domain/model/AssetModelMetrics.java
 /home/senaFactory/Desktop/AssetGuard_2620/backend/src/main/java/com/globalnet/assetguard/domain/model/AuditLog.java

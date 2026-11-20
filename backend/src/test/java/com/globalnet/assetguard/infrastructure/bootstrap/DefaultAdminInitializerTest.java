@@ -1,5 +1,6 @@
 package com.globalnet.assetguard.infrastructure.bootstrap;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
@@ -42,10 +43,29 @@ class DefaultAdminInitializerTest {
     void doesNotCreateAdminAgainWhenEmailAlreadyExists() {
         var initializer = new DefaultAdminInitializer(userRepositoryPort, new BCryptPasswordEncoder());
         when(userRepositoryPort.findByEmail("admin@globalnet.com"))
-                .thenReturn(Optional.of(User.builder().id(1L).email("admin@globalnet.com").build()));
+                .thenReturn(Optional.of(User.builder().id(1L).email("admin@globalnet.com").role("ADMIN").status(true).build()));
 
         initializer.run();
 
         verify(userRepositoryPort, never()).save(any(User.class));
+    }
+
+    @Test
+    void restoresStatusAndRoleWhenAdminExistsWithInactiveStatusOrNonAdminRole() {
+        var initializer = new DefaultAdminInitializer(userRepositoryPort, new BCryptPasswordEncoder());
+        User damagedAdmin = User.builder()
+                .id(1L)
+                .email("admin@globalnet.com")
+                .role("TECHNICIAN")
+                .status(false)
+                .build();
+        when(userRepositoryPort.findByEmail("admin@globalnet.com"))
+                .thenReturn(Optional.of(damagedAdmin));
+
+        initializer.run();
+
+        verify(userRepositoryPort).save(damagedAdmin);
+        assertTrue(Boolean.TRUE.equals(damagedAdmin.getStatus()));
+        assertEquals("ADMIN", damagedAdmin.getRole());
     }
 }

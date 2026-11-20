@@ -103,6 +103,7 @@ com/globalnet/assetguard/infrastructure/inbound/graphql/GraphQLViews$DashboardMe
 com/globalnet/assetguard/infrastructure/inbound/rest/dto/MaintenanceRecordRequestDto.class
 com/globalnet/assetguard/infrastructure/inbound/rest/dto/AssetRequestDto.class
 com/globalnet/assetguard/infrastructure/security/SecurityConfiguration.class
+com/globalnet/assetguard/application/usecase/UserUseCase.class
 com/globalnet/assetguard/infrastructure/security/CurrentAuthenticatedUser.class
 com/globalnet/assetguard/infrastructure/outbound/persistence/entity/AssetEntity.class
 com/globalnet/assetguard/application/usecase/BulkUploadAssetsUseCase.class

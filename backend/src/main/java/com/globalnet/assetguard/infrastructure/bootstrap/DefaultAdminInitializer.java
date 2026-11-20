@@ -12,7 +12,7 @@ import org.springframework.stereotype.Component;
 public class DefaultAdminInitializer implements CommandLineRunner {
 
     private static final Logger logger = LoggerFactory.getLogger(DefaultAdminInitializer.class);
-    private static final String ADMIN_EMAIL = "admin@globalnet.com";
+    public static final String ADMIN_EMAIL = "admin@globalnet.com";
     private static final String DEFAULT_PASSWORD = "12345";
 
     private final UserRepositoryPort userRepositoryPort;
@@ -27,8 +27,24 @@ public class DefaultAdminInitializer implements CommandLineRunner {
 
     @Override
     public void run(String... args) {
-        if (userRepositoryPort.findByEmail(ADMIN_EMAIL).isPresent()) {
-            logger.info("Default administrator already exists; skipping bootstrap");
+        var existingOpt = userRepositoryPort.findByEmail(ADMIN_EMAIL);
+        if (existingOpt.isPresent()) {
+            User existing = existingOpt.get();
+            boolean needsUpdate = false;
+            if (!Boolean.TRUE.equals(existing.getStatus())) {
+                existing.setStatus(true);
+                needsUpdate = true;
+            }
+            if (!"ADMIN".equalsIgnoreCase(existing.getRole())) {
+                existing.setRole("ADMIN");
+                needsUpdate = true;
+            }
+            if (needsUpdate) {
+                userRepositoryPort.save(existing);
+                logger.info("Default administrator restored to active ADMIN status: {}", ADMIN_EMAIL);
+            } else {
+                logger.info("Default administrator already exists; skipping bootstrap");
+            }
             return;
         }
 

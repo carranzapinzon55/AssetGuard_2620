@@ -1,13 +1,58 @@
 "use client";
 
 import { useEffect, useMemo, useState, type PointerEvent } from "react";
-import { Activity, AlertTriangle, CalendarDays, PackageCheck, RotateCcw, Search, TrendingDown, Wrench } from "lucide-react";
+import {
+  Activity,
+  AlertTriangle,
+  CalendarDays,
+  CheckCircle2,
+  Clock,
+  Layers,
+  PackageCheck,
+  RotateCcw,
+  Search,
+  TrendingDown,
+  Wrench,
+  X,
+} from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
-import { Button, CopyButton, CurrencyDisplay, Dialog, EmptyState, Feedback, FormField, InsightCard, LoadingRows, PageTitle, SelectInput, StatusTag, TextInput } from "@/components/workspace/ui";
+import {
+  Button,
+  CopyButton,
+  CurrencyDisplay,
+  Dialog,
+  DonutChart,
+  EmptyState,
+  Feedback,
+  FormField,
+  HorizontalBarChart,
+  InsightCard,
+  LoadingRows,
+  ModalKpiGrid,
+  PageTitle,
+  SelectInput,
+  StatusTag,
+  TextInput,
+  type BarChartItem,
+  type DonutSegment,
+} from "@/components/workspace/ui";
 import { LostReportsBanner, LostReportsBell } from "@/components/workspace/lost-reports-dialog";
 import { getDisplayUserName } from "@/lib/auth";
-import { ASSETS_CATALOG_QUERY, DASHBOARD_QUERY, LOANS_QUERY, LOST_ASSET_REPORTS_QUERY, MAINTENANCE_QUERY } from "@/lib/operations";
-import { errorMessage, queryGraphQL, type AssetItem, type LoanItem, type LostAssetReportItem, type MaintenanceItem } from "@/lib/workspace";
+import {
+  ASSETS_CATALOG_QUERY,
+  DASHBOARD_QUERY,
+  LOANS_QUERY,
+  LOST_ASSET_REPORTS_QUERY,
+  MAINTENANCE_QUERY,
+} from "@/lib/operations";
+import {
+  errorMessage,
+  queryGraphQL,
+  type AssetItem,
+  type LoanItem,
+  type LostAssetReportItem,
+  type MaintenanceItem,
+} from "@/lib/workspace";
 
 type Metrics = {
   estimatedLossValue: number;
@@ -22,7 +67,16 @@ type Metrics = {
   assetsByModel: Array<{ model: string; total: number; available: number }>;
 };
 type MetricsResult = { dashboardMetrics: Metrics };
-type MetricKey = "loss" | "maintenance" | "totalLoss" | "onTime" | "inField";
+type MetricKey =
+  | "loss"
+  | "maintenance"
+  | "totalLoss"
+  | "onTime"
+  | "inField"
+  | "invTotal"
+  | "invAvailable"
+  | "invMaintenance"
+  | "invLost";
 
 function getLocalTodayIso(): string {
   const now = new Date();
@@ -35,6 +89,10 @@ function getLocalTodayIso(): string {
 function normalizeText(text: string): string {
   return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 }
+
+/* ========================================================================
+   Componente Principal DashboardPage
+   ======================================================================== */
 
 export function DashboardPage() {
   const { session } = useAuth();
@@ -50,15 +108,25 @@ export function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [refresh, setRefresh] = useState(0);
+
+  // Modal analítico abierto
   const [selectedMetric, setSelectedMetric] = useState<MetricKey | null>(null);
+  const [modalSearch, setModalSearch] = useState("");
+  const [modalFilter, setModalFilter] = useState("ALL");
 
   // Estados interactivos para "Disponibilidad por modelo"
   const [modelSearch, setModelSearch] = useState("");
-  const [modelAvailabilityFilter, setModelAvailabilityFilter] = useState<"ALL" | "WITH_AVAILABLE" | "OUT_OF_STOCK" | "WITH_MAINTENANCE">("ALL");
-  const [modelSortBy, setModelSortBy] = useState<"MODEL_ASC" | "MODEL_DESC" | "AVAIL_DESC" | "AVAIL_ASC" | "TOTAL_DESC">("MODEL_ASC");
+  const [modelAvailabilityFilter, setModelAvailabilityFilter] = useState<
+    "ALL" | "WITH_AVAILABLE" | "OUT_OF_STOCK" | "WITH_MAINTENANCE"
+  >("ALL");
+  const [modelSortBy, setModelSortBy] = useState<
+    "MODEL_ASC" | "MODEL_DESC" | "AVAIL_DESC" | "AVAIL_ASC" | "TOTAL_DESC"
+  >("MODEL_ASC");
   const [selectedModel, setSelectedModel] = useState<string | null>(null);
   const [modelDetailSearch, setModelDetailSearch] = useState("");
-  const [modelDetailStatus, setModelDetailStatus] = useState<"ALL" | "AVAILABLE" | "LOANED" | "UNDER_MAINTENANCE" | "LOST">("ALL");
+  const [modelDetailStatus, setModelDetailStatus] = useState<
+    "ALL" | "AVAILABLE" | "LOANED" | "UNDER_MAINTENANCE" | "LOST"
+  >("ALL");
 
   useEffect(() => {
     let active = true;
@@ -89,13 +157,28 @@ export function DashboardPage() {
       .finally(() => {
         if (active) setLoading(false);
       });
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, [session?.token, refresh, appliedRange]);
+
+  function openMetricModal(key: MetricKey) {
+    setSelectedMetric(key);
+    setModalSearch("");
+    setModalFilter("ALL");
+  }
 
   const punctuality = metrics ? Math.max(0, Math.min(100, metrics.onTimeReturnPercentage)) : 0;
 
+  const totalInventoryValue = useMemo(() => {
+    return assets.reduce((sum, a) => sum + (a.estimatedValue ?? 0), 0);
+  }, [assets]);
+
   const modelStatsMap = useMemo(() => {
-    const map = new Map<string, { total: number; available: number; loaned: number; maintenance: number; lost: number }>();
+    const map = new Map<
+      string,
+      { total: number; available: number; loaned: number; maintenance: number; lost: number }
+    >();
     for (const a of assets) {
       const m = a.model?.trim() || "Sin modelo";
       const entry = map.get(m) || { total: 0, available: 0, loaned: 0, maintenance: 0, lost: 0 };
@@ -209,28 +292,53 @@ export function DashboardPage() {
     });
   }, [selectedModelData, modelDetailSearch, modelDetailStatus]);
 
-  // Desgloses enriquecidos para tarjetas métricas
+  /* ========================================================================
+     Desgloses analíticos para cada modal métrico
+     ======================================================================== */
+
+  // 1. MERMAS
   const lostAssetsBreakdown = useMemo(() => {
     const lostList = assets.filter((a) => a.status === "LOST");
-    return lostList.map((asset) => {
-      const report = lostReports.find(
-        (r) => r.asset?.id === asset.id || r.asset?.serialNumber === asset.serialNumber
-      );
-      return {
-        asset,
-        report,
-        date: report?.reportedAt ? report.reportedAt.split("T")[0] : null,
-        notes: report?.notes || "Sin observaciones",
-      };
-    }).filter((item) => {
-      if (!appliedRange.startDate && !appliedRange.endDate) return true;
-      if (!item.date) return true;
-      if (appliedRange.startDate && item.date < appliedRange.startDate) return false;
-      if (appliedRange.endDate && item.date > appliedRange.endDate) return false;
-      return true;
-    });
+    return lostList
+      .map((asset) => {
+        const report = lostReports.find(
+          (r) => r.asset?.id === asset.id || r.asset?.serialNumber === asset.serialNumber
+        );
+        return {
+          asset,
+          report,
+          date: report?.reportedAt ? report.reportedAt.split("T")[0] : asset.purchaseDate || null,
+          notes: report?.notes || "Equipo reportado como perdido / baja definitiva",
+        };
+      })
+      .filter((item) => {
+        if (!appliedRange.startDate && !appliedRange.endDate) return true;
+        if (!item.date) return true;
+        if (appliedRange.startDate && item.date < appliedRange.startDate) return false;
+        if (appliedRange.endDate && item.date > appliedRange.endDate) return false;
+        return true;
+      });
   }, [assets, lostReports, appliedRange]);
 
+  const lostByModelDistribution = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const item of lostAssetsBreakdown) {
+      const m = item.asset.model?.trim() || "Sin modelo";
+      map.set(m, (map.get(m) || 0) + (item.asset.estimatedValue ?? 0));
+    }
+    const totalLost = metrics?.estimatedLossValue || 1;
+    return Array.from(map.entries())
+      .map(([model, val]) => ({
+        label: model,
+        value: val,
+        formattedValue: <CurrencyDisplay usdAmount={val} />,
+        percentage: (val / totalLost) * 100,
+        color: "#ef4444",
+      }))
+      .sort((a, b) => b.value - a.value);
+  }, [lostAssetsBreakdown, metrics?.estimatedLossValue]);
+
+  // 2. MANTENIMIENTO CON COSTO > 0
   const maintenanceBreakdown = useMemo(() => {
     return maintenanceRecords
       .filter((rec) => rec.cost != null && Number(rec.cost) > 0)
@@ -242,49 +350,169 @@ export function DashboardPage() {
       });
   }, [maintenanceRecords, appliedRange]);
 
+  const providerMaintenanceDistribution = useMemo(() => {
+    const map = new Map<string, { totalCost: number; count: number }>();
+    for (const rec of maintenanceBreakdown) {
+      const p = rec.providerName?.trim() || "Interno / Taller propio";
+      const entry = map.get(p) || { totalCost: 0, count: 0 };
+      entry.totalCost += rec.cost ?? 0;
+      entry.count += 1;
+      map.set(p, entry);
+    }
+    const totalMaint = metrics?.maintenanceCostsValue || 1;
+    return Array.from(map.entries())
+      .map(([provider, data]) => ({
+        label: provider,
+        value: data.totalCost,
+        formattedValue: <CurrencyDisplay usdAmount={data.totalCost} />,
+        percentage: (data.totalCost / totalMaint) * 100,
+        color: "#f59e0b",
+      }))
+      .sort((a, b) => b.value - a.value);
+  }, [maintenanceBreakdown, metrics?.maintenanceCostsValue]);
+
+  // 3. PÉRDIDA ECONÓMICA TOTAL (MERMAS + MANTENIMIENTO)
+  const totalLossItems = useMemo(() => {
+    const items: Array<{
+      id: string;
+      type: "LOST" | "MAINTENANCE";
+      serialNumber: string;
+      model: string;
+      detail: string;
+      date: string;
+      cost: number;
+    }> = [];
+
+    for (const { asset, date, notes } of lostAssetsBreakdown) {
+      items.push({
+        id: `lost-${asset.id}`,
+        type: "LOST",
+        serialNumber: asset.serialNumber,
+        model: asset.model || "—",
+        detail: notes || "Pérdida / Baja definitiva",
+        date: date || "—",
+        cost: asset.estimatedValue ?? 0,
+      });
+    }
+
+    for (const rec of maintenanceBreakdown) {
+      items.push({
+        id: `maint-${rec.id}`,
+        type: "MAINTENANCE",
+        serialNumber: rec.asset?.serialNumber || "—",
+        model: rec.asset?.model || "—",
+        detail: `${rec.providerName || "Interno"}: ${rec.reason || "Mantenimiento general"}`,
+        date: rec.startDate ? rec.startDate.split("T")[0] : "—",
+        cost: rec.cost ?? 0,
+      });
+    }
+
+    return items.sort((a, b) => b.cost - a.cost);
+  }, [lostAssetsBreakdown, maintenanceBreakdown]);
+
+  // 4. PUNTUALIDAD · DEVOLUCIONES CERRADAS
+  const returnedLoansBreakdown = useMemo(() => {
+    return loans.filter((l) => {
+      const isReturned = l.status === "RETURNED" || (l.returnDateTime != null && l.returnDateTime.trim() !== "");
+      if (!isReturned) return false;
+      const returnDate = l.returnDateTime ? l.returnDateTime.split("T")[0] : null;
+      if (appliedRange.startDate && returnDate && returnDate < appliedRange.startDate) return false;
+      if (appliedRange.endDate && returnDate && returnDate > appliedRange.endDate) return false;
+      return true;
+    });
+  }, [loans, appliedRange]);
+
+  const onTimeLoans = useMemo(() => {
+    return returnedLoansBreakdown.filter((l) => l.delayDays == null || l.delayDays <= 0);
+  }, [returnedLoansBreakdown]);
+
+  const delayedLoans = useMemo(() => {
+    return returnedLoansBreakdown.filter((l) => l.delayDays != null && l.delayDays > 0);
+  }, [returnedLoansBreakdown]);
+
+  const avgDelayDays = useMemo(() => {
+    if (delayedLoans.length === 0) return 0;
+    const sum = delayedLoans.reduce((acc, l) => acc + (l.delayDays ?? 0), 0);
+    return sum / delayedLoans.length;
+  }, [delayedLoans]);
+
+  // 5. CUSTODIA · ACTUAL (EN CAMPO)
   const inFieldLoansBreakdown = useMemo(() => {
     return loans.filter(
       (l) => l.status === "APPROVED" && (!l.returnDateTime || l.returnDateTime.trim() === "")
     );
   }, [loans]);
 
-  const metricDetails = selectedMetric ? {
-    loss: {
-      eyebrow: "MERMAS · PERIODO",
-      title: "Mermas por activos perdidos o dados de baja",
-      value: metrics ? <CurrencyDisplay usdAmount={metrics.estimatedLossValue} /> : "—",
-      summary: "Valor estimado de activos perdidos o dados de baja en el periodo.",
-      note: "El rango aplicado filtra los reportes de pérdida y préstamos no recuperados por su fecha; no incluye equipos en mantenimiento técnico.",
-    },
-    maintenance: {
-      eyebrow: "MANTENIMIENTO · PERIODO",
-      title: "Gastos de mantenimiento",
-      value: metrics ? <CurrencyDisplay usdAmount={metrics.maintenanceCostsValue} /> : "—",
-      summary: "Suma de los costos registrados en órdenes de mantenimiento (excluye intervenciones sin costo).",
-      note: "El rango aplicado filtra los costos por la fecha de inicio de la intervención; sin rango, muestra el total histórico registrado con costo facturado.",
-    },
-    totalLoss: {
-      eyebrow: "IMPACTO FINANCIERO · PERIODO",
-      title: "Pérdida económica total",
-      value: metrics ? <CurrencyDisplay usdAmount={metrics.totalEconomicLoss} /> : "—",
-      summary: "Impacto económico consolidado: Mermas por activos perdidos o dados de baja + Costos de mantenimiento.",
-      note: "Consolidación financiera que suma el costo total de los activos declarados como merma o baja definitiva más las facturas de intervención y reparación técnica en el periodo seleccionado.",
-    },
-    onTime: {
-      eyebrow: "PUNTUALIDAD · PERIODO",
-      title: "Devoluciones puntuales",
-      value: `${punctuality.toFixed(1)}%`,
-      summary: "Porcentaje de préstamos cerrados que se devolvieron en o antes de su vencimiento.",
-      note: `${(100 - punctuality).toFixed(1)}% de las devoluciones del periodo quedó fuera de plazo.`,
-    },
-    inField: {
-      eyebrow: "CUSTODIA · ACTUAL",
-      title: "Activos actualmente en campo",
-      value: String(metrics?.assetsCurrentlyInField ?? 0),
-      summary: "Cantidad de equipos que permanecen asignados en préstamo en este momento.",
-      note: "Es una lectura del estado actual de la flota y no cambia al filtrar el periodo.",
-    },
-  }[selectedMetric] : null;
+  const inFieldTotalValue = useMemo(() => {
+    return inFieldLoansBreakdown.reduce((sum, l) => sum + (l.asset?.estimatedValue ?? 0), 0);
+  }, [inFieldLoansBreakdown]);
+
+  const inFieldByTechnician = useMemo(() => {
+    const map = new Map<string, { name: string; email: string; count: number; totalValue: number }>();
+    for (const loan of inFieldLoansBreakdown) {
+      const email = loan.user?.email || "Sin asignar";
+      const name = loan.user ? getDisplayUserName(loan.user) : "Desconocido";
+      const entry = map.get(email) || { name, email, count: 0, totalValue: 0 };
+      entry.count += 1;
+      entry.totalValue += loan.asset?.estimatedValue ?? 0;
+      map.set(email, entry);
+    }
+    const totalCount = inFieldLoansBreakdown.length || 1;
+    return Array.from(map.values())
+      .map((item) => ({
+        label: `${item.name} (${item.email})`,
+        value: item.count,
+        formattedValue: `${item.count} ${item.count === 1 ? "equipo" : "equipos"}`,
+        percentage: (item.count / totalCount) * 100,
+        color: "#3b82f6",
+      }))
+      .sort((a, b) => b.value - a.value);
+  }, [inFieldLoansBreakdown]);
+
+  // 6, 7, 8, 9. MODALES DE INVENTARIO
+  const availableAssetsList = useMemo(() => assets.filter((a) => a.status === "AVAILABLE"), [assets]);
+  const availableAssetsValue = useMemo(
+    () => availableAssetsList.reduce((sum, a) => sum + (a.estimatedValue ?? 0), 0),
+    [availableAssetsList]
+  );
+
+  const maintenanceAssetsList = useMemo(
+    () => assets.filter((a) => a.status === "UNDER_MAINTENANCE"),
+    [assets]
+  );
+  const maintenanceAssetsValue = useMemo(
+    () => maintenanceAssetsList.reduce((sum, a) => sum + (a.estimatedValue ?? 0), 0),
+    [maintenanceAssetsList]
+  );
+
+  const lostAssetsList = useMemo(() => assets.filter((a) => a.status === "LOST"), [assets]);
+  const lostAssetsValue = useMemo(
+    () => lostAssetsList.reduce((sum, a) => sum + (a.estimatedValue ?? 0), 0),
+    [lostAssetsList]
+  );
+
+  const loanedAssetsCount = useMemo(
+    () => assets.filter((a) => a.status === "LOANED" || a.status === "ON_LOAN").length,
+    [assets]
+  );
+
+  function getTopModelsBarData(list: AssetItem[], color: string) {
+    const map = new Map<string, number>();
+    for (const a of list) {
+      const m = a.model?.trim() || "Sin modelo";
+      map.set(m, (map.get(m) || 0) + 1);
+    }
+    const total = list.length || 1;
+    return Array.from(map.entries())
+      .map(([model, count]) => ({
+        label: model,
+        value: count,
+        formattedValue: `${count} ${count === 1 ? "unidad" : "unidades"}`,
+        percentage: (count / total) * 100,
+        color,
+      }))
+      .sort((a, b) => b.value - a.value);
+  }
 
   function updateMetricSpotlight(event: PointerEvent<HTMLElement>) {
     if (event.pointerType === "touch") return;
@@ -303,6 +531,7 @@ export function DashboardPage() {
       />
       <Feedback error={error} />
       <LostReportsBanner />
+
       <section className="work-section dashboard-filters">
         <div className="filter-heading">
           <CalendarDays size={16} />
@@ -361,6 +590,7 @@ export function DashboardPage() {
           </Button>
         </div>
       </section>
+
       {loading ? (
         <LoadingRows label="Calculando métricas" />
       ) : !metrics ? (
@@ -373,7 +603,7 @@ export function DashboardPage() {
               className="metric-panel loss"
               aria-label="Ver detalle de mermas por activos perdidos o dados de baja"
               aria-haspopup="dialog"
-              onClick={() => setSelectedMetric("loss")}
+              onClick={() => openMetricModal("loss")}
               onPointerMove={updateMetricSpotlight}
             >
               <div className="metric-panel-top">
@@ -392,12 +622,13 @@ export function DashboardPage() {
                 <span>VER DESGLOSE <span aria-hidden="true">↗</span></span>
               </div>
             </button>
+
             <button
               type="button"
               className="metric-panel maintenance-cost"
               aria-label="Ver detalle de gastos de mantenimiento"
               aria-haspopup="dialog"
-              onClick={() => setSelectedMetric("maintenance")}
+              onClick={() => openMetricModal("maintenance")}
               onPointerMove={updateMetricSpotlight}
             >
               <div className="metric-panel-top">
@@ -416,12 +647,13 @@ export function DashboardPage() {
                 <span>VER DESGLOSE <span aria-hidden="true">↗</span></span>
               </div>
             </button>
+
             <button
               type="button"
               className="metric-panel total-loss"
               aria-label="Ver detalle de pérdida económica total"
               aria-haspopup="dialog"
-              onClick={() => setSelectedMetric("totalLoss")}
+              onClick={() => openMetricModal("totalLoss")}
               onPointerMove={updateMetricSpotlight}
             >
               <div className="metric-panel-top">
@@ -440,12 +672,13 @@ export function DashboardPage() {
                 <span>VER DESGLOSE <span aria-hidden="true">↗</span></span>
               </div>
             </button>
+
             <button
               type="button"
               className="metric-panel"
               aria-label="Ver detalle de devoluciones puntuales"
               aria-haspopup="dialog"
-              onClick={() => setSelectedMetric("onTime")}
+              onClick={() => openMetricModal("onTime")}
               onPointerMove={updateMetricSpotlight}
             >
               <div className="metric-panel-top">
@@ -460,12 +693,13 @@ export function DashboardPage() {
                 <strong className="telemetry-value">{punctuality.toFixed(0)}%</strong>
               </div>
             </button>
+
             <button
               type="button"
               className="metric-panel field"
               aria-label="Ver detalle de activos actualmente en campo"
               aria-haspopup="dialog"
-              onClick={() => setSelectedMetric("inField")}
+              onClick={() => openMetricModal("inField")}
               onPointerMove={updateMetricSpotlight}
             >
               <div className="metric-panel-top">
@@ -489,11 +723,40 @@ export function DashboardPage() {
               <span className="toolbar-note">ESTADO DE LA FLOTA · ACTUAL</span>
             </div>
             <div className="insight-grid inventory-kpi-grid">
-              <InsightCard label="TOTAL DE EQUIPOS" value={metrics.totalAssets} description="Activos registrados en el inventario." progress={100} detail={`${metrics.totalAssets} equipos registrados en total.`} />
-              <InsightCard label="DISPONIBLES" value={metrics.availableAssets} description="Listos para asignación." progress={metrics.totalAssets ? (metrics.availableAssets / metrics.totalAssets) * 100 : 0} detail={`${metrics.availableAssets} de ${metrics.totalAssets} equipos están disponibles.`} />
-              <InsightCard label="EN MANTENIMIENTO" value={metrics.assetsUnderMaintenance} description="Equipos con una intervención abierta." progress={metrics.totalAssets ? (metrics.assetsUnderMaintenance / metrics.totalAssets) * 100 : 0} detail={`${metrics.assetsUnderMaintenance} equipos están actualmente en mantenimiento.`} />
-              <InsightCard label="PERDIDOS" value={metrics.lostAssets} description="Equipos reportados como perdidos." progress={metrics.totalAssets ? (metrics.lostAssets / metrics.totalAssets) * 100 : 0} detail={`${metrics.lostAssets} equipos figuran con estado perdido.`} />
+              <InsightCard
+                label="TOTAL DE EQUIPOS"
+                value={metrics.totalAssets}
+                description="Activos registrados en el inventario."
+                progress={100}
+                detail={`${metrics.totalAssets} equipos registrados en total.`}
+                onClick={() => openMetricModal("invTotal")}
+              />
+              <InsightCard
+                label="DISPONIBLES"
+                value={metrics.availableAssets}
+                description="Listos para asignación."
+                progress={metrics.totalAssets ? (metrics.availableAssets / metrics.totalAssets) * 100 : 0}
+                detail={`${metrics.availableAssets} de ${metrics.totalAssets} equipos están disponibles.`}
+                onClick={() => openMetricModal("invAvailable")}
+              />
+              <InsightCard
+                label="EN MANTENIMIENTO"
+                value={metrics.assetsUnderMaintenance}
+                description="Equipos con una intervención abierta."
+                progress={metrics.totalAssets ? (metrics.assetsUnderMaintenance / metrics.totalAssets) * 100 : 0}
+                detail={`${metrics.assetsUnderMaintenance} equipos están actualmente en mantenimiento.`}
+                onClick={() => openMetricModal("invMaintenance")}
+              />
+              <InsightCard
+                label="PERDIDOS"
+                value={metrics.lostAssets}
+                description="Equipos reportados como perdidos."
+                progress={metrics.totalAssets ? (metrics.lostAssets / metrics.totalAssets) * 100 : 0}
+                detail={`${metrics.lostAssets} equipos figuran con estado perdido.`}
+                onClick={() => openMetricModal("invLost")}
+              />
             </div>
+
             <div className="model-availability">
               <div className="model-availability-header">
                 <div className="model-availability-intro">
@@ -578,10 +841,34 @@ export function DashboardPage() {
                         >
                           <span className="model-availability-name">{item.model}</span>
                           <span className="model-availability-track stacked-bar" aria-hidden="true">
-                            {availPct > 0 && <span className="bar-seg bar-seg-available" style={{ width: `${availPct}%` }} title={`${stats.available} disponibles`} />}
-                            {loanPct > 0 && <span className="bar-seg bar-seg-loaned" style={{ width: `${loanPct}%` }} title={`${stats.loaned} en préstamo`} />}
-                            {maintPct > 0 && <span className="bar-seg bar-seg-maintenance" style={{ width: `${maintPct}%` }} title={`${stats.maintenance} en mantenimiento`} />}
-                            {lostPct > 0 && <span className="bar-seg bar-seg-lost" style={{ width: `${lostPct}%` }} title={`${stats.lost} perdidos`} />}
+                            {availPct > 0 && (
+                              <span
+                                className="bar-seg bar-seg-available"
+                                style={{ width: `${availPct}%` }}
+                                title={`${stats.available} disponibles`}
+                              />
+                            )}
+                            {loanPct > 0 && (
+                              <span
+                                className="bar-seg bar-seg-loaned"
+                                style={{ width: `${loanPct}%` }}
+                                title={`${stats.loaned} en préstamo`}
+                              />
+                            )}
+                            {maintPct > 0 && (
+                              <span
+                                className="bar-seg bar-seg-maintenance"
+                                style={{ width: `${maintPct}%` }}
+                                title={`${stats.maintenance} en mantenimiento`}
+                              />
+                            )}
+                            {lostPct > 0 && (
+                              <span
+                                className="bar-seg bar-seg-lost"
+                                style={{ width: `${lostPct}%` }}
+                                title={`${stats.lost} perdidos`}
+                              />
+                            )}
                           </span>
                           <span className="model-availability-counts font-mono">
                             <strong>{stats.available}</strong> disp. / {stats.loaned} prést. / {stats.maintenance} mant. / {stats.lost} perd.
@@ -616,317 +903,1323 @@ export function DashboardPage() {
         </>
       )}
 
-      {metricDetails && (
-        <Dialog open title={metricDetails.title} eyebrow={metricDetails.eyebrow} onClose={() => setSelectedMetric(null)}>
-          <div className="metric-detail space-y-3">
-            <strong className="metric-detail-value telemetry-value">{metricDetails.value}</strong>
-            <p>{metricDetails.summary}</p>
+      {/* ========================================================================
+          MODALES DE DESGLOSE ANALÍTICO ("VER DESGLOSE")
+          ======================================================================== */}
 
-            {/* Desglose para MERMAS */}
+      {selectedMetric && (
+        <Dialog
+          open
+          title={
+            selectedMetric === "loss"
+              ? "Mermas por activos perdidos o baja definitiva"
+              : selectedMetric === "maintenance"
+              ? "Gastos e intervenciones de mantenimiento"
+              : selectedMetric === "totalLoss"
+              ? "Pérdida económica total consolidada"
+              : selectedMetric === "onTime"
+              ? "Puntualidad en devoluciones de préstamos"
+              : selectedMetric === "inField"
+              ? "Activos actualmente en campo"
+              : selectedMetric === "invTotal"
+              ? "Inventario completo de la flota"
+              : selectedMetric === "invAvailable"
+              ? "Equipos disponibles para préstamo"
+              : selectedMetric === "invMaintenance"
+              ? "Equipos en taller o mantenimiento activo"
+              : "Equipos declarados en pérdida o merma"
+          }
+          eyebrow={
+            selectedMetric === "loss"
+              ? "REPORTE ANALÍTICO · MERMAS"
+              : selectedMetric === "maintenance"
+              ? "REPORTE ANALÍTICO · MANTENIMIENTO"
+              : selectedMetric === "totalLoss"
+              ? "REPORTE FINANCIERO CONSOLIDADO"
+              : selectedMetric === "onTime"
+              ? "REPORTE ANALÍTICO · LOGÍSTICA"
+              : selectedMetric === "inField"
+              ? "REPORTE OPERATIVO · CUSTODIA"
+              : "REPORTE DE FLOTA · INVENTARIO"
+          }
+          onClose={() => setSelectedMetric(null)}
+        >
+          <div className="space-y-4 pt-1">
+            {/* 1. MODAL MERMAS */}
             {selectedMetric === "loss" && (
-              <div>
-                <div className="metric-breakdown-section-title">
-                  <span>Activos declarados en pérdida o baja definitiva ({lostAssetsBreakdown.length})</span>
-                  <span className="font-mono text-rose-600 dark:text-rose-400 font-bold">
-                    <CurrencyDisplay usdAmount={metrics?.estimatedLossValue ?? 0} />
-                  </span>
+              <>
+                <ModalKpiGrid
+                  items={[
+                    {
+                      label: "Total perdidos",
+                      value: lostAssetsBreakdown.length,
+                      sub: "Activos con baja",
+                    },
+                    {
+                      label: "Impacto financiero",
+                      value: <CurrencyDisplay usdAmount={metrics?.estimatedLossValue ?? 0} />,
+                      sub: "Valor estimado",
+                    },
+                    {
+                      label: "Promedio / equipo",
+                      value: (
+                        <CurrencyDisplay
+                          usdAmount={
+                            lostAssetsBreakdown.length > 0
+                              ? (metrics?.estimatedLossValue ?? 0) / lostAssetsBreakdown.length
+                              : 0
+                          }
+                        />
+                      ),
+                      sub: "Costo unitario medio",
+                    },
+                    {
+                      label: "% del inventario",
+                      value: `${(
+                        ((metrics?.estimatedLossValue ?? 0) / Math.max(1, totalInventoryValue)) *
+                        100
+                      ).toFixed(1)}%`,
+                      sub: "Impacto sobre flota",
+                    },
+                  ]}
+                />
+
+                <div className="modal-chart-card">
+                  <div className="modal-chart-title">
+                    <span>Distribución del valor perdido por modelo</span>
+                    <span className="font-mono text-xs text-rose-600 dark:text-rose-400 font-bold">
+                      <CurrencyDisplay usdAmount={metrics?.estimatedLossValue ?? 0} />
+                    </span>
+                  </div>
+                  <HorizontalBarChart items={lostByModelDistribution} maxCount={6} />
                 </div>
-                {lostAssetsBreakdown.length === 0 ? (
-                  <p className="text-xs text-slate-500 dark:text-slate-400 py-3 text-center">
-                    No se registran activos perdidos o dados de baja en el periodo seleccionado.
-                  </p>
-                ) : (
+
+                <div>
+                  <div className="modal-table-controls">
+                    <label className="search-control">
+                      <Search size={14} />
+                      <input
+                        value={modalSearch}
+                        onChange={(e) => setModalSearch(e.target.value)}
+                        placeholder="Buscar por serie o modelo..."
+                        aria-label="Buscar equipos perdidos"
+                      />
+                    </label>
+                    <span className="text-[11px] font-mono text-slate-500">
+                      {
+                        lostAssetsBreakdown.filter((item) => {
+                          const s = normalizeText(modalSearch.trim());
+                          return (
+                            !s ||
+                            normalizeText(item.asset.serialNumber).includes(s) ||
+                            normalizeText(item.asset.model || "").includes(s)
+                          );
+                        }).length
+                      }{" "}
+                      de {lostAssetsBreakdown.length} equipos
+                    </span>
+                  </div>
+
                   <div className="metric-breakdown-table-wrap">
                     <table className="metric-breakdown-table">
                       <thead>
                         <tr>
                           <th>Serie</th>
                           <th>Modelo</th>
-                          <th>Fecha reporte</th>
+                          <th>Fecha reporte/baja</th>
                           <th>Observaciones</th>
                           <th className="text-right">Valor estimado</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {lostAssetsBreakdown.map(({ asset, date, notes }) => (
-                          <tr key={asset.id}>
-                            <td>
-                              <span className="flex items-center gap-1 font-mono font-semibold">
-                                {asset.serialNumber}
-                                <CopyButton text={asset.serialNumber} label={`Copiar serie ${asset.serialNumber}`} />
-                              </span>
-                            </td>
-                            <td>{asset.model || "—"}</td>
-                            <td className="font-mono text-slate-500 dark:text-slate-400">{date || "—"}</td>
-                            <td className="max-w-xs truncate" title={notes}>{notes}</td>
-                            <td className="text-right font-mono font-semibold text-rose-600 dark:text-rose-400">
-                              <CurrencyDisplay usdAmount={asset.estimatedValue ?? 0} />
-                            </td>
-                          </tr>
-                        ))}
+                        {lostAssetsBreakdown
+                          .filter((item) => {
+                            const s = normalizeText(modalSearch.trim());
+                            return (
+                              !s ||
+                              normalizeText(item.asset.serialNumber).includes(s) ||
+                              normalizeText(item.asset.model || "").includes(s)
+                            );
+                          })
+                          .map(({ asset, date, notes }) => (
+                            <tr key={asset.id}>
+                              <td>
+                                <span className="flex items-center gap-1 font-mono font-semibold">
+                                  {asset.serialNumber}
+                                  <CopyButton
+                                    text={asset.serialNumber}
+                                    label={`Copiar serie ${asset.serialNumber}`}
+                                  />
+                                </span>
+                              </td>
+                              <td>{asset.model || "—"}</td>
+                              <td className="font-mono text-slate-500">{date || "—"}</td>
+                              <td className="max-w-xs truncate" title={notes}>
+                                {notes}
+                              </td>
+                              <td className="text-right font-mono font-semibold text-rose-600 dark:text-rose-400">
+                                <CurrencyDisplay usdAmount={asset.estimatedValue ?? 0} />
+                              </td>
+                            </tr>
+                          ))}
                       </tbody>
                     </table>
                   </div>
-                )}
-              </div>
+                </div>
+              </>
             )}
 
-            {/* Desglose para MANTENIMIENTO */}
+            {/* 2. MODAL MANTENIMIENTO */}
             {selectedMetric === "maintenance" && (
-              <div>
-                <div className="metric-breakdown-section-title">
-                  <span>Intervenciones técnicas facturadas con costo ({maintenanceBreakdown.length})</span>
-                  <span className="font-mono text-amber-600 dark:text-amber-400 font-bold">
-                    <CurrencyDisplay usdAmount={metrics?.maintenanceCostsValue ?? 0} />
-                  </span>
+              <>
+                <ModalKpiGrid
+                  items={[
+                    {
+                      label: "Intervenciones facturadas",
+                      value: maintenanceBreakdown.length,
+                      sub: "Con costo mayor a $0",
+                    },
+                    {
+                      label: "Gasto total acumulado",
+                      value: <CurrencyDisplay usdAmount={metrics?.maintenanceCostsValue ?? 0} />,
+                      sub: "Facturado en órdenes",
+                    },
+                    {
+                      label: "Costo promedio",
+                      value: (
+                        <CurrencyDisplay
+                          usdAmount={
+                            maintenanceBreakdown.length > 0
+                              ? (metrics?.maintenanceCostsValue ?? 0) / maintenanceBreakdown.length
+                              : 0
+                          }
+                        />
+                      ),
+                      sub: "Por intervención",
+                    },
+                    {
+                      label: "Mayor proveedor",
+                      value: providerMaintenanceDistribution[0]?.label || "—",
+                      sub: `${providerMaintenanceDistribution[0]?.percentage.toFixed(0) ?? 0}% del gasto`,
+                    },
+                  ]}
+                />
+
+                <div className="modal-chart-card">
+                  <div className="modal-chart-title">
+                    <span>Gasto consolidado por Proveedor Técnico</span>
+                    <span className="font-mono text-xs text-amber-600 dark:text-amber-400 font-bold">
+                      <CurrencyDisplay usdAmount={metrics?.maintenanceCostsValue ?? 0} />
+                    </span>
+                  </div>
+                  <HorizontalBarChart items={providerMaintenanceDistribution} maxCount={6} />
                 </div>
-                {maintenanceBreakdown.length === 0 ? (
-                  <p className="text-xs text-slate-500 dark:text-slate-400 py-3 text-center">
-                    No se registran intervenciones de mantenimiento con costo facturado en este periodo.
-                  </p>
-                ) : (
+
+                <div>
+                  <div className="modal-table-controls">
+                    <label className="search-control">
+                      <Search size={14} />
+                      <input
+                        value={modalSearch}
+                        onChange={(e) => setModalSearch(e.target.value)}
+                        placeholder="Buscar por serie, modelo o proveedor..."
+                        aria-label="Buscar intervenciones de mantenimiento"
+                      />
+                    </label>
+                    <span className="text-[11px] font-mono text-slate-500">
+                      {
+                        maintenanceBreakdown.filter((rec) => {
+                          const s = normalizeText(modalSearch.trim());
+                          return (
+                            !s ||
+                            normalizeText(rec.asset?.serialNumber || "").includes(s) ||
+                            normalizeText(rec.asset?.model || "").includes(s) ||
+                            normalizeText(rec.providerName || "").includes(s)
+                          );
+                        }).length
+                      }{" "}
+                      de {maintenanceBreakdown.length} intervenciones
+                    </span>
+                  </div>
+
                   <div className="metric-breakdown-table-wrap">
                     <table className="metric-breakdown-table">
                       <thead>
                         <tr>
                           <th>Serie</th>
                           <th>Modelo</th>
-                          <th>Proveedor</th>
-                          <th>Fecha</th>
                           <th>Motivo</th>
+                          <th>Proveedor</th>
+                          <th>Fecha inicio</th>
                           <th className="text-right">Costo</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {maintenanceBreakdown.map((rec) => (
-                          <tr key={rec.id}>
-                            <td>
-                              <span className="flex items-center gap-1 font-mono font-semibold">
-                                {rec.asset?.serialNumber || "—"}
-                                {rec.asset?.serialNumber && (
-                                  <CopyButton text={rec.asset.serialNumber} label={`Copiar serie ${rec.asset.serialNumber}`} />
-                                )}
-                              </span>
-                            </td>
-                            <td>{rec.asset?.model || "—"}</td>
-                            <td>{rec.providerName || "Interno"}</td>
-                            <td className="font-mono text-slate-500 dark:text-slate-400">
-                              {rec.startDate ? rec.startDate.split("T")[0] : "—"}
-                            </td>
-                            <td className="max-w-xs truncate" title={rec.reason || ""}>
-                              {rec.reason || "Mantenimiento general"}
-                            </td>
-                            <td className="text-right font-mono font-semibold text-amber-600 dark:text-amber-400">
-                              <CurrencyDisplay usdAmount={rec.cost ?? 0} />
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Desglose consolidado para PÉRDIDA ECONÓMICA TOTAL */}
-            {selectedMetric === "totalLoss" && metrics && (
-              <div className="space-y-3">
-                <div className="total-loss-breakdown my-2 space-y-2 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/40 p-3 text-xs">
-                  <div className="flex justify-between items-center text-slate-700 dark:text-slate-300">
-                    <span>Mermas (activos perdidos / baja):</span>
-                    <span className="font-mono font-semibold"><CurrencyDisplay usdAmount={metrics.estimatedLossValue} /></span>
-                  </div>
-                  <div className="flex justify-between items-center text-slate-700 dark:text-slate-300">
-                    <span>Costos de mantenimiento facturados:</span>
-                    <span className="font-mono font-semibold"><CurrencyDisplay usdAmount={metrics.maintenanceCostsValue} /></span>
-                  </div>
-                  <div className="flex justify-between items-center pt-2 border-t border-slate-200 dark:border-slate-800 font-bold text-slate-900 dark:text-slate-100">
-                    <span>Pérdida económica consolidada:</span>
-                    <span className="font-mono text-rose-600 dark:text-rose-400 font-bold"><CurrencyDisplay usdAmount={metrics.totalEconomicLoss} /></span>
-                  </div>
-                </div>
-
-                <div>
-                  <div className="metric-breakdown-section-title">
-                    <span>1. Activos en merma / pérdida ({lostAssetsBreakdown.length})</span>
-                    <span className="font-mono text-rose-600 dark:text-rose-400 font-semibold">
-                      <CurrencyDisplay usdAmount={metrics.estimatedLossValue} />
-                    </span>
-                  </div>
-                  {lostAssetsBreakdown.length === 0 ? (
-                    <p className="text-xs text-slate-500 dark:text-slate-400 py-2 text-center">
-                      No hay mermas en el periodo.
-                    </p>
-                  ) : (
-                    <div className="metric-breakdown-table-wrap">
-                      <table className="metric-breakdown-table">
-                        <thead>
-                          <tr>
-                            <th>Serie</th>
-                            <th>Modelo</th>
-                            <th>Fecha</th>
-                            <th>Observaciones</th>
-                            <th className="text-right">Valor estimado</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {lostAssetsBreakdown.map(({ asset, date, notes }) => (
-                            <tr key={asset.id}>
-                              <td>
-                                <span className="flex items-center gap-1 font-mono font-semibold">
-                                  {asset.serialNumber}
-                                  <CopyButton text={asset.serialNumber} label={`Copiar serie ${asset.serialNumber}`} />
-                                </span>
-                              </td>
-                              <td>{asset.model || "—"}</td>
-                              <td className="font-mono text-slate-500 dark:text-slate-400">{date || "—"}</td>
-                              <td className="max-w-xs truncate" title={notes}>{notes}</td>
-                              <td className="text-right font-mono font-semibold text-rose-600 dark:text-rose-400">
-                                <CurrencyDisplay usdAmount={asset.estimatedValue ?? 0} />
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </div>
-
-                <div>
-                  <div className="metric-breakdown-section-title">
-                    <span>2. Intervenciones técnicas con costo ({maintenanceBreakdown.length})</span>
-                    <span className="font-mono text-amber-600 dark:text-amber-400 font-semibold">
-                      <CurrencyDisplay usdAmount={metrics.maintenanceCostsValue} />
-                    </span>
-                  </div>
-                  {maintenanceBreakdown.length === 0 ? (
-                    <p className="text-xs text-slate-500 dark:text-slate-400 py-2 text-center">
-                      No hay mantenimientos con costo en el periodo.
-                    </p>
-                  ) : (
-                    <div className="metric-breakdown-table-wrap">
-                      <table className="metric-breakdown-table">
-                        <thead>
-                          <tr>
-                            <th>Serie</th>
-                            <th>Modelo</th>
-                            <th>Proveedor</th>
-                            <th>Fecha</th>
-                            <th>Motivo</th>
-                            <th className="text-right">Costo</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {maintenanceBreakdown.map((rec) => (
+                        {maintenanceBreakdown
+                          .filter((rec) => {
+                            const s = normalizeText(modalSearch.trim());
+                            return (
+                              !s ||
+                              normalizeText(rec.asset?.serialNumber || "").includes(s) ||
+                              normalizeText(rec.asset?.model || "").includes(s) ||
+                              normalizeText(rec.providerName || "").includes(s)
+                            );
+                          })
+                          .map((rec) => (
                             <tr key={rec.id}>
                               <td>
                                 <span className="flex items-center gap-1 font-mono font-semibold">
                                   {rec.asset?.serialNumber || "—"}
                                   {rec.asset?.serialNumber && (
-                                    <CopyButton text={rec.asset.serialNumber} label={`Copiar serie ${rec.asset.serialNumber}`} />
+                                    <CopyButton
+                                      text={rec.asset.serialNumber}
+                                      label={`Copiar serie ${rec.asset.serialNumber}`}
+                                    />
                                   )}
                                 </span>
                               </td>
                               <td>{rec.asset?.model || "—"}</td>
-                              <td>{rec.providerName || "Interno"}</td>
-                              <td className="font-mono text-slate-500 dark:text-slate-400">
-                                {rec.startDate ? rec.startDate.split("T")[0] : "—"}
-                              </td>
                               <td className="max-w-xs truncate" title={rec.reason || ""}>
                                 {rec.reason || "Mantenimiento general"}
+                              </td>
+                              <td>{rec.providerName || "Interno"}</td>
+                              <td className="font-mono text-slate-500">
+                                {rec.startDate ? rec.startDate.split("T")[0] : "—"}
                               </td>
                               <td className="text-right font-mono font-semibold text-amber-600 dark:text-amber-400">
                                 <CurrencyDisplay usdAmount={rec.cost ?? 0} />
                               </td>
                             </tr>
                           ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
-              </div>
+              </>
             )}
 
-            {/* Desglose para CUSTODIA · ACTUAL */}
-            {selectedMetric === "inField" && (
-              <div>
-                <div className="metric-breakdown-section-title">
-                  <span>Equipos actualmente asignados en custodia ({inFieldLoansBreakdown.length})</span>
-                  <span className="font-mono font-bold text-slate-700 dark:text-slate-300">
-                    {inFieldLoansBreakdown.length} activos
-                  </span>
+            {/* 3. MODAL PÉRDIDA ECONÓMICA TOTAL */}
+            {selectedMetric === "totalLoss" && (
+              <>
+                <ModalKpiGrid
+                  items={[
+                    {
+                      label: "Pérdida total",
+                      value: <CurrencyDisplay usdAmount={metrics?.totalEconomicLoss ?? 0} />,
+                      sub: "Impacto consolidado",
+                    },
+                    {
+                      label: "Mermas (activos)",
+                      value: <CurrencyDisplay usdAmount={metrics?.estimatedLossValue ?? 0} />,
+                      sub: `${(
+                        ((metrics?.estimatedLossValue ?? 0) /
+                          Math.max(1, metrics?.totalEconomicLoss ?? 1)) *
+                        100
+                      ).toFixed(1)}% del impacto`,
+                    },
+                    {
+                      label: "Mantenimiento",
+                      value: <CurrencyDisplay usdAmount={metrics?.maintenanceCostsValue ?? 0} />,
+                      sub: `${(
+                        ((metrics?.maintenanceCostsValue ?? 0) /
+                          Math.max(1, metrics?.totalEconomicLoss ?? 1)) *
+                        100
+                      ).toFixed(1)}% del impacto`,
+                    },
+                    {
+                      label: "Total eventos",
+                      value: totalLossItems.length,
+                      sub: `${lostAssetsBreakdown.length} mermas / ${maintenanceBreakdown.length} mant.`,
+                    },
+                  ]}
+                />
+
+                <div className="modal-chart-card">
+                  <div className="modal-chart-title">
+                    <span>Composición financiera del impacto económico<i> (eventos)</i></span> 
+                    <span className="font-mono text-xs font-bold text-rose-600 dark:text-rose-400">
+                      <CurrencyDisplay usdAmount={metrics?.totalEconomicLoss ?? 0} />
+                    </span>
+                  </div>
+                  <DonutChart
+                    segments={[
+                      {
+                        label: "Mermas (activos perdidos)",
+                        value: metrics?.estimatedLossValue ?? 0,
+                        color: "#ef4444",
+                        formattedValue: <CurrencyDisplay usdAmount={metrics?.estimatedLossValue ?? 0} />,
+                      },
+                      {
+                        label: "Reparaciones y mantenimiento",
+                        value: metrics?.maintenanceCostsValue ?? 0,
+                        color: "#f59e0b",
+                        formattedValue: <CurrencyDisplay usdAmount={metrics?.maintenanceCostsValue ?? 0} />,
+                      },
+                    ]}
+                    centerValue={`${totalLossItems.length} ev.`}
+                    centerLabel="CONSOLIDADO"
+                  />
                 </div>
-                {inFieldLoansBreakdown.length === 0 ? (
-                  <p className="text-xs text-slate-500 dark:text-slate-400 py-3 text-center">
-                    No hay activos asignados en campo en este momento.
-                  </p>
-                ) : (
+
+                <div>
+                  <div className="modal-table-controls">
+                    <label className="search-control">
+                      <Search size={14} />
+                      <input
+                        value={modalSearch}
+                        onChange={(e) => setModalSearch(e.target.value)}
+                        placeholder="Buscar por serie, modelo o detalle..."
+                        aria-label="Buscar eventos de pérdida económica"
+                      />
+                    </label>
+                    <SelectInput
+                      className="filter-select w-44 text-xs"
+                      value={modalFilter}
+                      onChange={(e) => setModalFilter(e.target.value)}
+                      aria-label="Filtrar por tipo de pérdida"
+                    >
+                      <option value="ALL">Todos los tipos</option>
+                      <option value="LOST">Solo mermas / activos</option>
+                      <option value="MAINTENANCE">Solo mantenimientos</option>
+                    </SelectInput>
+                    <span className="text-[11px] font-mono text-slate-500">
+                      {
+                        totalLossItems
+                          .filter((item) => {
+                            if (modalFilter !== "ALL" && item.type !== modalFilter) return false;
+                            const s = normalizeText(modalSearch.trim());
+                            return (
+                              !s ||
+                              normalizeText(item.serialNumber).includes(s) ||
+                              normalizeText(item.model).includes(s) ||
+                              normalizeText(item.detail).includes(s)
+                            );
+                          }).length
+                      }{" "}
+                      de {totalLossItems.length} registros
+                    </span>
+                  </div>
+
+                  <div className="metric-breakdown-table-wrap">
+                    <table className="metric-breakdown-table">
+                      <thead>
+                        <tr>
+                          <th className="whitespace-nowrap">Tipo</th>
+                          <th className="whitespace-nowrap">Serie / Equipo</th>
+                          <th>Modelo</th>
+                          <th>Detalle / Proveedor</th>
+                          <th className="whitespace-nowrap">Fecha</th>
+                          <th className="text-right whitespace-nowrap">Impacto económico</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {totalLossItems
+                          .filter((item) => {
+                            if (modalFilter !== "ALL" && item.type !== modalFilter) return false;
+                            const s = normalizeText(modalSearch.trim());
+                            return (
+                              !s ||
+                              normalizeText(item.serialNumber).includes(s) ||
+                              normalizeText(item.model).includes(s) ||
+                              normalizeText(item.detail).includes(s)
+                            );
+                          })
+                          .map((item) => (
+                            <tr key={item.id}>
+                              <td className="whitespace-nowrap">
+                                {item.type === "LOST" ? (
+                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-rose-100 dark:bg-rose-950/40 text-rose-800 dark:text-rose-300">
+                                    Merma
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300">
+                                    Mantenimiento
+                                  </span>
+                                )}
+                              </td>
+                              <td className="whitespace-nowrap">
+                                <span className="flex items-center gap-1 font-mono font-semibold">
+                                  {item.serialNumber}
+                                  {item.serialNumber !== "—" && (
+                                    <CopyButton
+                                      text={item.serialNumber}
+                                      label={`Copiar serie ${item.serialNumber}`}
+                                    />
+                                  )}
+                                </span>
+                              </td>
+                              <td>{item.model}</td>
+                              <td className="max-w-xs truncate" title={item.detail}>
+                                {item.detail}
+                              </td>
+                              <td className="font-mono text-slate-500 whitespace-nowrap">{item.date}</td>
+                              <td
+                                className={`text-right font-mono font-semibold whitespace-nowrap ${
+                                  item.type === "LOST"
+                                    ? "text-rose-600 dark:text-rose-400"
+                                    : "text-amber-600 dark:text-amber-400"
+                                }`}
+                              >
+                                <CurrencyDisplay usdAmount={item.cost} />
+                              </td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* 4. MODAL PUNTUALIDAD */}
+            {selectedMetric === "onTime" && (
+              <>
+                <ModalKpiGrid
+                  items={[
+                    {
+                      label: "Total devoluciones",
+                      value: returnedLoansBreakdown.length,
+                      sub: "Préstamos cerrados",
+                    },
+                    {
+                      label: "Tasa puntualidad",
+                      value: `${punctuality.toFixed(1)}%`,
+                      sub: `${onTimeLoans.length} a tiempo`,
+                    },
+                    {
+                      label: "Devoluciones con mora",
+                      value: delayedLoans.length,
+                      sub: `${(100 - punctuality).toFixed(1)}% fuera de plazo`,
+                    },
+                    {
+                      label: "Retraso promedio",
+                      value: `${avgDelayDays.toFixed(1)} días`,
+                      sub: "En préstamos con mora",
+                    },
+                  ]}
+                />
+
+                <div className="modal-chart-card">
+                  <div className="modal-chart-title">
+                    <span>Balance de entregas en el periodo</span>
+                    <span className="font-mono text-xs text-emerald-600 font-bold">
+                      {punctuality.toFixed(0)}% a tiempo
+                    </span>
+                  </div>
+                  <DonutChart
+                    segments={[
+                      {
+                        label: "Devueltos a tiempo",
+                        value: onTimeLoans.length,
+                        color: "#10b981",
+                        formattedValue: `${onTimeLoans.length} préstamos`,
+                      },
+                      {
+                        label: "Devueltos fuera de plazo",
+                        value: delayedLoans.length,
+                        color: "#ef4444",
+                        formattedValue: `${delayedLoans.length} préstamos`,
+                      },
+                    ]}
+                    centerValue={`${punctuality.toFixed(0)}%`}
+                    centerLabel="A TIEMPO"
+                  />
+                </div>
+
+                <div>
+                  <div className="modal-table-controls">
+                    <label className="search-control">
+                      <Search size={14} />
+                      <input
+                        value={modalSearch}
+                        onChange={(e) => setModalSearch(e.target.value)}
+                        placeholder="Buscar por serie, modelo o técnico..."
+                        aria-label="Buscar préstamos devueltos"
+                      />
+                    </label>
+                    <SelectInput
+                      className="filter-select w-44 text-xs"
+                      value={modalFilter}
+                      onChange={(e) => setModalFilter(e.target.value)}
+                      aria-label="Filtrar por puntualidad"
+                    >
+                      <option value="ALL">Todas las devoluciones</option>
+                      <option value="ON_TIME">Solo a tiempo</option>
+                      <option value="DELAYED">Solo con mora</option>
+                    </SelectInput>
+                    <span className="text-[11px] font-mono text-slate-500">
+                      {
+                        returnedLoansBreakdown.filter((l) => {
+                          const isDelayed = l.delayDays != null && l.delayDays > 0;
+                          if (modalFilter === "ON_TIME" && isDelayed) return false;
+                          if (modalFilter === "DELAYED" && !isDelayed) return false;
+                          const s = normalizeText(modalSearch.trim());
+                          return (
+                            !s ||
+                            normalizeText(l.asset?.serialNumber || "").includes(s) ||
+                            normalizeText(l.asset?.model || "").includes(s) ||
+                            normalizeText(l.user?.fullName || "").includes(s) ||
+                            normalizeText(l.user?.email || "").includes(s)
+                          );
+                        }).length
+                      }{" "}
+                      de {returnedLoansBreakdown.length} devoluciones
+                    </span>
+                  </div>
+
                   <div className="metric-breakdown-table-wrap">
                     <table className="metric-breakdown-table">
                       <thead>
                         <tr>
                           <th>Serie</th>
                           <th>Modelo</th>
-                          <th>Técnico asignado</th>
-                          <th>Fecha préstamo</th>
-                          <th>Vencimiento</th>
-                          <th>Estado</th>
+                          <th>Técnico</th>
+                          <th>Fecha límite</th>
+                          <th>Fecha devolución</th>
+                          <th>Estado / Mora</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {inFieldLoansBreakdown.map((loan) => (
-                          <tr key={loan.id}>
-                            <td>
-                              <span className="flex items-center gap-1 font-mono font-semibold">
-                                {loan.asset?.serialNumber || "—"}
-                                {loan.asset?.serialNumber && (
-                                  <CopyButton text={loan.asset.serialNumber} label={`Copiar serie ${loan.asset.serialNumber}`} />
-                                )}
-                              </span>
-                            </td>
-                            <td>{loan.asset?.model || "—"}</td>
-                            <td>
-                              {loan.user ? (
-                                <span title={loan.user.email}>
-                                  <strong className="text-slate-800 dark:text-slate-200">{getDisplayUserName(loan.user)}</strong>
-                                  <span className="block text-[10px] text-slate-500 dark:text-slate-400 font-mono">{loan.user.email}</span>
-                                </span>
-                              ) : (
-                                "—"
-                              )}
-                            </td>
-                            <td className="font-mono text-slate-500 dark:text-slate-400">
-                              {loan.requestDate ? loan.requestDate.split("T")[0] : "—"}
-                            </td>
-                            <td className="font-mono font-semibold">
-                              {loan.dueLocalDate || "—"}
-                            </td>
-                            <td>
-                              <StatusTag value={loan.status} />
-                            </td>
-                          </tr>
-                        ))}
+                        {returnedLoansBreakdown
+                          .filter((l) => {
+                            const isDelayed = l.delayDays != null && l.delayDays > 0;
+                            if (modalFilter === "ON_TIME" && isDelayed) return false;
+                            if (modalFilter === "DELAYED" && !isDelayed) return false;
+                            const s = normalizeText(modalSearch.trim());
+                            return (
+                              !s ||
+                              normalizeText(l.asset?.serialNumber || "").includes(s) ||
+                              normalizeText(l.asset?.model || "").includes(s) ||
+                              normalizeText(l.user?.fullName || "").includes(s) ||
+                              normalizeText(l.user?.email || "").includes(s)
+                            );
+                          })
+                          .map((loan) => {
+                            const isDelayed = loan.delayDays != null && loan.delayDays > 0;
+                            return (
+                              <tr key={loan.id}>
+                                <td>
+                                  <span className="flex items-center gap-1 font-mono font-semibold">
+                                    {loan.asset?.serialNumber || "—"}
+                                    {loan.asset?.serialNumber && (
+                                      <CopyButton
+                                        text={loan.asset.serialNumber}
+                                        label={`Copiar serie ${loan.asset.serialNumber}`}
+                                      />
+                                    )}
+                                  </span>
+                                </td>
+                                <td>{loan.asset?.model || "—"}</td>
+                                <td>
+                                  {loan.user ? (
+                                    <span title={loan.user.email}>
+                                      <strong className="text-slate-800 dark:text-slate-200">
+                                        {getDisplayUserName(loan.user)}
+                                      </strong>
+                                      <span className="block text-[10px] text-slate-500 font-mono">
+                                        {loan.user.email}
+                                      </span>
+                                    </span>
+                                  ) : (
+                                    "—"
+                                  )}
+                                </td>
+                                <td className="font-mono">{loan.dueLocalDate || "—"}</td>
+                                <td className="font-mono text-slate-500">
+                                  {loan.returnDateTime ? loan.returnDateTime.split("T")[0] : "—"}
+                                </td>
+                                <td>
+                                  {isDelayed ? (
+                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-rose-100 dark:bg-rose-950/40 text-rose-800 dark:text-rose-300">
+                                      +{loan.delayDays}d mora
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-100 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300">
+                                      A tiempo
+                                    </span>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
                       </tbody>
                     </table>
                   </div>
-                )}
-              </div>
+                </div>
+              </>
             )}
 
-            {selectedMetric === "onTime" && (
-              <div className="metric-progress detail-progress">
-                <span style={{ width: `${punctuality}%` }} />
-              </div>
+            {/* 5. MODAL CUSTODIA · ACTUAL */}
+            {selectedMetric === "inField" && (
+              <>
+                <ModalKpiGrid
+                  items={[
+                    {
+                      label: "Equipos en campo",
+                      value: inFieldLoansBreakdown.length,
+                      sub: "Actualmente asignados",
+                    },
+                    {
+                      label: "Valor desplegado",
+                      value: <CurrencyDisplay usdAmount={inFieldTotalValue} />,
+                      sub: "Bajo custodia técnica",
+                    },
+                    {
+                      label: "Técnicos activos",
+                      value: inFieldByTechnician.length,
+                      sub: "Con equipos a cargo",
+                    },
+                    {
+                      label: "Mayor custodio",
+                      value: inFieldByTechnician[0]?.label.split(" (")[0] || "—",
+                      sub: inFieldByTechnician[0]?.formattedValue || "0 equipos",
+                    },
+                  ]}
+                />
+
+                <div className="modal-chart-card">
+                  <div className="modal-chart-title">
+                    <span>Equipos desplegados por Técnico de Campo</span>
+                    <span className="font-mono text-xs text-blue-600 font-bold">
+                      {inFieldLoansBreakdown.length} equipos activos
+                    </span>
+                  </div>
+                  <HorizontalBarChart items={inFieldByTechnician} maxCount={6} />
+                </div>
+
+                <div>
+                  <div className="modal-table-controls">
+                    <label className="search-control">
+                      <Search size={14} />
+                      <input
+                        value={modalSearch}
+                        onChange={(e) => setModalSearch(e.target.value)}
+                        placeholder="Buscar por serie, modelo o técnico..."
+                        aria-label="Buscar equipos en campo"
+                      />
+                    </label>
+                    <span className="text-[11px] font-mono text-slate-500">
+                      {
+                        inFieldLoansBreakdown.filter((loan) => {
+                          const s = normalizeText(modalSearch.trim());
+                          return (
+                            !s ||
+                            normalizeText(loan.asset?.serialNumber || "").includes(s) ||
+                            normalizeText(loan.asset?.model || "").includes(s) ||
+                            normalizeText(loan.user?.fullName || "").includes(s) ||
+                            normalizeText(loan.user?.email || "").includes(s)
+                          );
+                        }).length
+                      }{" "}
+                      de {inFieldLoansBreakdown.length} equipos
+                    </span>
+                  </div>
+
+                  <div className="metric-breakdown-table-wrap">
+                    <table className="metric-breakdown-table">
+                      <thead>
+                        <tr>
+                          <th>Serie</th>
+                          <th>Modelo</th>
+                          <th>Técnico responsable</th>
+                          <th>Fecha entrega</th>
+                          <th>Fecha límite</th>
+                          <th className="text-right">Valor custodiado</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {inFieldLoansBreakdown
+                          .filter((loan) => {
+                            const s = normalizeText(modalSearch.trim());
+                            return (
+                              !s ||
+                              normalizeText(loan.asset?.serialNumber || "").includes(s) ||
+                              normalizeText(loan.asset?.model || "").includes(s) ||
+                              normalizeText(loan.user?.fullName || "").includes(s) ||
+                              normalizeText(loan.user?.email || "").includes(s)
+                            );
+                          })
+                          .map((loan) => (
+                            <tr key={loan.id}>
+                              <td>
+                                <span className="flex items-center gap-1 font-mono font-semibold">
+                                  {loan.asset?.serialNumber || "—"}
+                                  {loan.asset?.serialNumber && (
+                                    <CopyButton
+                                      text={loan.asset.serialNumber}
+                                      label={`Copiar serie ${loan.asset.serialNumber}`}
+                                    />
+                                  )}
+                                </span>
+                              </td>
+                              <td>{loan.asset?.model || "—"}</td>
+                              <td>
+                                {loan.user ? (
+                                  <span title={loan.user.email}>
+                                    <strong className="text-slate-800 dark:text-slate-200">
+                                      {getDisplayUserName(loan.user)}
+                                    </strong>
+                                    <span className="block text-[10px] text-slate-500 font-mono">
+                                      {loan.user.email}
+                                    </span>
+                                  </span>
+                                ) : (
+                                  "—"
+                                )}
+                              </td>
+                              <td className="font-mono text-slate-500">
+                                {loan.requestDate ? loan.requestDate.split("T")[0] : "—"}
+                              </td>
+                              <td className="font-mono font-semibold">{loan.dueLocalDate || "—"}</td>
+                              <td className="text-right font-mono font-semibold text-slate-700 dark:text-slate-300">
+                                <CurrencyDisplay usdAmount={loan.asset?.estimatedValue ?? 0} />
+                              </td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </>
             )}
 
-            <div className="metric-detail-note pt-2">
-              <span className="work-eyebrow">LECTURA DEL INDICADOR</span>
-              <p>{metricDetails.note}</p>
+            {/* 6. MODAL TOTAL DE EQUIPOS */}
+            {selectedMetric === "invTotal" && (
+              <>
+                <ModalKpiGrid
+                  items={[
+                    {
+                      label: "Total flota",
+                      value: assets.length,
+                      sub: "Activos en inventario",
+                    },
+                    {
+                      label: "Valorización total",
+                      value: <CurrencyDisplay usdAmount={totalInventoryValue} />,
+                      sub: "Activos patrimoniales",
+                    },
+                    {
+                      label: "Flota operativa",
+                      value: availableAssetsList.length + loanedAssetsCount,
+                      sub: "Disponibles + Préstamos",
+                    },
+                    {
+                      label: "Disponibilidad",
+                      value: `${(
+                        (availableAssetsList.length / Math.max(1, assets.length)) *
+                        100
+                      ).toFixed(1)}%`,
+                      sub: "En bodega",
+                    },
+                  ]}
+                />
+
+                <div className="modal-chart-card">
+                  <div className="modal-chart-title">
+                    <span>Estado integral de la flota de activos</span>
+                    <span className="font-mono text-xs font-bold text-slate-700 dark:text-slate-300">
+                      {assets.length} unidades
+                    </span>
+                  </div>
+                  <DonutChart
+                    segments={[
+                      {
+                        label: "Disponibles",
+                        value: availableAssetsList.length,
+                        color: "#10b981",
+                        formattedValue: `${availableAssetsList.length} equipos`,
+                      },
+                      {
+                        label: "En préstamo",
+                        value: loanedAssetsCount,
+                        color: "#3b82f6",
+                        formattedValue: `${loanedAssetsCount} equipos`,
+                      },
+                      {
+                        label: "En mantenimiento",
+                        value: maintenanceAssetsList.length,
+                        color: "#f59e0b",
+                        formattedValue: `${maintenanceAssetsList.length} equipos`,
+                      },
+                      {
+                        label: "Perdidos / Mermas",
+                        value: lostAssetsList.length,
+                        color: "#ef4444",
+                        formattedValue: `${lostAssetsList.length} equipos`,
+                      },
+                    ]}
+                    centerValue={assets.length}
+                    centerLabel="TOTAL"
+                  />
+                </div>
+
+                <div>
+                  <div className="modal-table-controls">
+                    <label className="search-control">
+                      <Search size={14} />
+                      <input
+                        value={modalSearch}
+                        onChange={(e) => setModalSearch(e.target.value)}
+                        placeholder="Buscar por serie o modelo..."
+                        aria-label="Buscar equipos en inventario"
+                      />
+                    </label>
+                    <SelectInput
+                      className="filter-select w-44 text-xs"
+                      value={modalFilter}
+                      onChange={(e) => setModalFilter(e.target.value)}
+                      aria-label="Filtrar por estado"
+                    >
+                      <option value="ALL">Todos los estados</option>
+                      <option value="AVAILABLE">Disponible</option>
+                      <option value="LOANED">En préstamo</option>
+                      <option value="UNDER_MAINTENANCE">En mantenimiento</option>
+                      <option value="LOST">Perdido</option>
+                    </SelectInput>
+                    <span className="text-[11px] font-mono text-slate-500">
+                      {
+                        assets.filter((a) => {
+                          if (modalFilter !== "ALL") {
+                            if (modalFilter === "LOANED") {
+                              if (a.status !== "LOANED" && a.status !== "ON_LOAN") return false;
+                            } else if (a.status !== modalFilter) {
+                              return false;
+                            }
+                          }
+                          const s = normalizeText(modalSearch.trim());
+                          return (
+                            !s ||
+                            normalizeText(a.serialNumber).includes(s) ||
+                            normalizeText(a.model || "").includes(s)
+                          );
+                        }).length
+                      }{" "}
+                      de {assets.length} equipos
+                    </span>
+                  </div>
+
+                  <div className="metric-breakdown-table-wrap">
+                    <table className="metric-breakdown-table">
+                      <thead>
+                        <tr>
+                          <th>Serie</th>
+                          <th>Modelo</th>
+                          <th>Fecha compra</th>
+                          <th>Estado</th>
+                          <th className="text-right">Valor estimado</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {assets
+                          .filter((a) => {
+                            if (modalFilter !== "ALL") {
+                              if (modalFilter === "LOANED") {
+                                if (a.status !== "LOANED" && a.status !== "ON_LOAN") return false;
+                              } else if (a.status !== modalFilter) {
+                                return false;
+                              }
+                            }
+                            const s = normalizeText(modalSearch.trim());
+                            return (
+                              !s ||
+                              normalizeText(a.serialNumber).includes(s) ||
+                              normalizeText(a.model || "").includes(s)
+                            );
+                          })
+                          .map((a) => (
+                            <tr key={a.id}>
+                              <td>
+                                <span className="flex items-center gap-1 font-mono font-semibold">
+                                  {a.serialNumber}
+                                  <CopyButton text={a.serialNumber} label={`Copiar serie ${a.serialNumber}`} />
+                                </span>
+                              </td>
+                              <td>{a.model || "—"}</td>
+                              <td className="font-mono text-slate-500">{a.purchaseDate || "—"}</td>
+                              <td>
+                                <StatusTag value={a.status} />
+                              </td>
+                              <td className="text-right font-mono font-semibold text-slate-700 dark:text-slate-300">
+                                <CurrencyDisplay usdAmount={a.estimatedValue ?? 0} />
+                              </td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* 7. MODAL DISPONIBLES */}
+            {selectedMetric === "invAvailable" && (
+              <>
+                <ModalKpiGrid
+                  items={[
+                    {
+                      label: "Equipos disponibles",
+                      value: availableAssetsList.length,
+                      sub: "En bodega para préstamo",
+                    },
+                    {
+                      label: "Valorización disponible",
+                      value: <CurrencyDisplay usdAmount={availableAssetsValue} />,
+                      sub: "Listo para desplegar",
+                    },
+                    {
+                      label: "% de la flota",
+                      value: `${(
+                        (availableAssetsList.length / Math.max(1, assets.length)) *
+                        100
+                      ).toFixed(1)}%`,
+                      sub: "Stock activo",
+                    },
+                    {
+                      label: "Modelos con stock",
+                      value: new Set(availableAssetsList.map((a) => a.model)).size,
+                      sub: "Variantes en inventario",
+                    },
+                  ]}
+                />
+
+                <div className="modal-chart-card">
+                  <div className="modal-chart-title">
+                    <span>Modelos con mayor stock disponible</span>
+                    <span className="font-mono text-xs font-bold text-emerald-600">
+                      {availableAssetsList.length} equipos
+                    </span>
+                  </div>
+                  <HorizontalBarChart
+                    items={getTopModelsBarData(availableAssetsList, "#10b981")}
+                    maxCount={6}
+                  />
+                </div>
+
+                <div>
+                  <div className="modal-table-controls">
+                    <label className="search-control">
+                      <Search size={14} />
+                      <input
+                        value={modalSearch}
+                        onChange={(e) => setModalSearch(e.target.value)}
+                        placeholder="Buscar por serie o modelo..."
+                        aria-label="Buscar equipos disponibles"
+                      />
+                    </label>
+                    <span className="text-[11px] font-mono text-slate-500">
+                      {
+                        availableAssetsList.filter((a) => {
+                          const s = normalizeText(modalSearch.trim());
+                          return (
+                            !s ||
+                            normalizeText(a.serialNumber).includes(s) ||
+                            normalizeText(a.model || "").includes(s)
+                          );
+                        }).length
+                      }{" "}
+                      de {availableAssetsList.length} equipos disponibles
+                    </span>
+                  </div>
+
+                  <div className="metric-breakdown-table-wrap">
+                    <table className="metric-breakdown-table">
+                      <thead>
+                        <tr>
+                          <th>Serie</th>
+                          <th>Modelo</th>
+                          <th>Fecha compra</th>
+                          <th className="text-right">Valor estimado</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {availableAssetsList
+                          .filter((a) => {
+                            const s = normalizeText(modalSearch.trim());
+                            return (
+                              !s ||
+                              normalizeText(a.serialNumber).includes(s) ||
+                              normalizeText(a.model || "").includes(s)
+                            );
+                          })
+                          .map((a) => (
+                            <tr key={a.id}>
+                              <td>
+                                <span className="flex items-center gap-1 font-mono font-semibold">
+                                  {a.serialNumber}
+                                  <CopyButton text={a.serialNumber} label={`Copiar serie ${a.serialNumber}`} />
+                                </span>
+                              </td>
+                              <td>{a.model || "—"}</td>
+                              <td className="font-mono text-slate-500">{a.purchaseDate || "—"}</td>
+                              <td className="text-right font-mono font-semibold text-emerald-600 dark:text-emerald-400">
+                                <CurrencyDisplay usdAmount={a.estimatedValue ?? 0} />
+                              </td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* 8. MODAL EN MANTENIMIENTO */}
+            {selectedMetric === "invMaintenance" && (
+              <>
+                <ModalKpiGrid
+                  items={[
+                    {
+                      label: "En mantenimiento",
+                      value: maintenanceAssetsList.length,
+                      sub: "Equipos en taller",
+                    },
+                    {
+                      label: "Valorización afectada",
+                      value: <CurrencyDisplay usdAmount={maintenanceAssetsValue} />,
+                      sub: "Activos fuera de servicio",
+                    },
+                    {
+                      label: "% de la flota",
+                      value: `${(
+                        (maintenanceAssetsList.length / Math.max(1, assets.length)) *
+                        100
+                      ).toFixed(1)}%`,
+                      sub: "En reparación",
+                    },
+                    {
+                      label: "Órdenes abiertas",
+                      value: maintenanceRecords.filter((r) => !r.endDate || r.endDate.trim() === "").length,
+                      sub: "Intervenciones activas",
+                    },
+                  ]}
+                />
+
+                <div className="modal-chart-card">
+                  <div className="modal-chart-title">
+                    <span>Modelos con mayor volumen en mantenimiento</span>
+                    <span className="font-mono text-xs font-bold text-amber-600">
+                      {maintenanceAssetsList.length} equipos
+                    </span>
+                  </div>
+                  <HorizontalBarChart
+                    items={getTopModelsBarData(maintenanceAssetsList, "#f59e0b")}
+                    maxCount={6}
+                  />
+                </div>
+
+                <div>
+                  <div className="modal-table-controls">
+                    <label className="search-control">
+                      <Search size={14} />
+                      <input
+                        value={modalSearch}
+                        onChange={(e) => setModalSearch(e.target.value)}
+                        placeholder="Buscar por serie, modelo o proveedor..."
+                        aria-label="Buscar equipos en mantenimiento"
+                      />
+                    </label>
+                    <span className="text-[11px] font-mono text-slate-500">
+                      {
+                        maintenanceAssetsList.filter((a) => {
+                          const s = normalizeText(modalSearch.trim());
+                          return (
+                            !s ||
+                            normalizeText(a.serialNumber).includes(s) ||
+                            normalizeText(a.model || "").includes(s)
+                          );
+                        }).length
+                      }{" "}
+                      de {maintenanceAssetsList.length} equipos en taller
+                    </span>
+                  </div>
+
+                  <div className="metric-breakdown-table-wrap">
+                    <table className="metric-breakdown-table">
+                      <thead>
+                        <tr>
+                          <th>Serie</th>
+                          <th>Modelo</th>
+                          <th>Motivo intervención</th>
+                          <th>Proveedor</th>
+                          <th>Fecha inicio</th>
+                          <th className="text-right">Costo presupuestado</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {maintenanceAssetsList
+                          .filter((a) => {
+                            const s = normalizeText(modalSearch.trim());
+                            return (
+                              !s ||
+                              normalizeText(a.serialNumber).includes(s) ||
+                              normalizeText(a.model || "").includes(s)
+                            );
+                          })
+                          .map((a) => {
+                            const rec = maintenanceRecords.find(
+                              (r) => r.asset?.id === a.id || r.asset?.serialNumber === a.serialNumber
+                            );
+                            return (
+                              <tr key={a.id}>
+                                <td>
+                                  <span className="flex items-center gap-1 font-mono font-semibold">
+                                    {a.serialNumber}
+                                    <CopyButton text={a.serialNumber} label={`Copiar serie ${a.serialNumber}`} />
+                                  </span>
+                                </td>
+                                <td>{a.model || "—"}</td>
+                                <td className="max-w-xs truncate" title={rec?.reason || ""}>
+                                  {rec?.reason || "Mantenimiento preventivo / correctivo"}
+                                </td>
+                                <td>{rec?.providerName || "Interno / Taller"}</td>
+                                <td className="font-mono text-slate-500">
+                                  {rec?.startDate ? rec.startDate.split("T")[0] : a.purchaseDate || "—"}
+                                </td>
+                                <td className="text-right font-mono font-semibold text-amber-600 dark:text-amber-400">
+                                  <CurrencyDisplay usdAmount={rec?.cost ?? 0} />
+                                </td>
+                              </tr>
+                            );
+                          })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* 9. MODAL PERDIDOS */}
+            {selectedMetric === "invLost" && (
+              <>
+                <ModalKpiGrid
+                  items={[
+                    {
+                      label: "Equipos perdidos",
+                      value: lostAssetsList.length,
+                      sub: "Declarados en merma",
+                    },
+                    {
+                      label: "Valor patrimonial perdido",
+                      value: <CurrencyDisplay usdAmount={lostAssetsValue} />,
+                      sub: "Pérdida en inventario",
+                    },
+                    {
+                      label: "% de la flota",
+                      value: `${((lostAssetsList.length / Math.max(1, assets.length)) * 100).toFixed(1)}%`,
+                      sub: "Tasa de merma",
+                    },
+                    {
+                      label: "Modelo más afectado",
+                      value: getTopModelsBarData(lostAssetsList, "#ef4444")[0]?.label || "—",
+                      sub: getTopModelsBarData(lostAssetsList, "#ef4444")[0]?.formattedValue || "0 unidades",
+                    },
+                  ]}
+                />
+
+                <div className="modal-chart-card">
+                  <div className="modal-chart-title">
+                    <span>Modelos con mayor volumen de pérdida</span>
+                    <span className="font-mono text-xs font-bold text-rose-600">
+                      {lostAssetsList.length} equipos
+                    </span>
+                  </div>
+                  <HorizontalBarChart
+                    items={getTopModelsBarData(lostAssetsList, "#ef4444")}
+                    maxCount={6}
+                  />
+                </div>
+
+                <div>
+                  <div className="modal-table-controls">
+                    <label className="search-control">
+                      <Search size={14} />
+                      <input
+                        value={modalSearch}
+                        onChange={(e) => setModalSearch(e.target.value)}
+                        placeholder="Buscar por serie o modelo..."
+                        aria-label="Buscar equipos perdidos"
+                      />
+                    </label>
+                    <span className="text-[11px] font-mono text-slate-500">
+                      {
+                        lostAssetsList.filter((a) => {
+                          const s = normalizeText(modalSearch.trim());
+                          return (
+                            !s ||
+                            normalizeText(a.serialNumber).includes(s) ||
+                            normalizeText(a.model || "").includes(s)
+                          );
+                        }).length
+                      }{" "}
+                      de {lostAssetsList.length} equipos perdidos
+                    </span>
+                  </div>
+
+                  <div className="metric-breakdown-table-wrap">
+                    <table className="metric-breakdown-table">
+                      <thead>
+                        <tr>
+                          <th>Serie</th>
+                          <th>Modelo</th>
+                          <th>Fecha reporte / compra</th>
+                          <th>Observaciones</th>
+                          <th className="text-right">Valor estimado</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {lostAssetsList
+                          .filter((a) => {
+                            const s = normalizeText(modalSearch.trim());
+                            return (
+                              !s ||
+                              normalizeText(a.serialNumber).includes(s) ||
+                              normalizeText(a.model || "").includes(s)
+                            );
+                          })
+                          .map((a) => {
+                            const report = lostReports.find(
+                              (r) => r.asset?.id === a.id || r.asset?.serialNumber === a.serialNumber
+                            );
+                            return (
+                              <tr key={a.id}>
+                                <td>
+                                  <span className="flex items-center gap-1 font-mono font-semibold">
+                                    {a.serialNumber}
+                                    <CopyButton text={a.serialNumber} label={`Copiar serie ${a.serialNumber}`} />
+                                  </span>
+                                </td>
+                                <td>{a.model || "—"}</td>
+                                <td className="font-mono text-slate-500">
+                                  {report?.reportedAt ? report.reportedAt.split("T")[0] : a.purchaseDate || "—"}
+                                </td>
+                                <td className="max-w-xs truncate" title={report?.notes || ""}>
+                                  {report?.notes || "Equipo declarado como perdido o dado de baja"}
+                                </td>
+                                <td className="text-right font-mono font-semibold text-rose-600 dark:text-rose-400">
+                                  <CurrencyDisplay usdAmount={a.estimatedValue ?? 0} />
+                                </td>
+                              </tr>
+                            );
+                          })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </>
+            )}
+
+            <div className="flex justify-end pt-3 border-t border-slate-200 dark:border-slate-800">
+              <Button variant="secondary" onClick={() => setSelectedMetric(null)}>
+                Cerrar reporte
+              </Button>
             </div>
           </div>
         </Dialog>
       )}
+
+      {/* ========================================================================
+          MODAL DESGLOSE POR MODELO DE FLOTA
+          ======================================================================== */}
 
       {selectedModelData && (
         <Dialog
@@ -939,8 +2232,10 @@ export function DashboardPage() {
             <div className="model-breakdown-grid">
               <button
                 type="button"
-                className={`model-breakdown-kpi available clickable ${modelDetailStatus === "AVAILABLE" ? "active-filter" : ""}`}
-                onClick={() => setModelDetailStatus((curr) => curr === "AVAILABLE" ? "ALL" : "AVAILABLE")}
+                className={`model-breakdown-kpi available clickable ${
+                  modelDetailStatus === "AVAILABLE" ? "active-filter" : ""
+                }`}
+                onClick={() => setModelDetailStatus((curr) => (curr === "AVAILABLE" ? "ALL" : "AVAILABLE"))}
                 title="Filtrar por disponibles"
               >
                 <span className="work-eyebrow !text-emerald-700 dark:!text-emerald-400">DISPONIBLES</span>
@@ -949,8 +2244,10 @@ export function DashboardPage() {
               </button>
               <button
                 type="button"
-                className={`model-breakdown-kpi loaned clickable ${modelDetailStatus === "LOANED" ? "active-filter" : ""}`}
-                onClick={() => setModelDetailStatus((curr) => curr === "LOANED" ? "ALL" : "LOANED")}
+                className={`model-breakdown-kpi loaned clickable ${
+                  modelDetailStatus === "LOANED" ? "active-filter" : ""
+                }`}
+                onClick={() => setModelDetailStatus((curr) => (curr === "LOANED" ? "ALL" : "LOANED"))}
                 title="Filtrar por en préstamo"
               >
                 <span className="work-eyebrow !text-blue-700 dark:!text-blue-400">EN PRÉSTAMO</span>
@@ -959,8 +2256,12 @@ export function DashboardPage() {
               </button>
               <button
                 type="button"
-                className={`model-breakdown-kpi maintenance clickable ${modelDetailStatus === "UNDER_MAINTENANCE" ? "active-filter" : ""}`}
-                onClick={() => setModelDetailStatus((curr) => curr === "UNDER_MAINTENANCE" ? "ALL" : "UNDER_MAINTENANCE")}
+                className={`model-breakdown-kpi maintenance clickable ${
+                  modelDetailStatus === "UNDER_MAINTENANCE" ? "active-filter" : ""
+                }`}
+                onClick={() =>
+                  setModelDetailStatus((curr) => (curr === "UNDER_MAINTENANCE" ? "ALL" : "UNDER_MAINTENANCE"))
+                }
                 title="Filtrar por en mantenimiento"
               >
                 <span className="work-eyebrow !text-amber-700 dark:!text-amber-400">EN MANTENIMIENTO</span>
@@ -969,8 +2270,10 @@ export function DashboardPage() {
               </button>
               <button
                 type="button"
-                className={`model-breakdown-kpi lost clickable ${modelDetailStatus === "LOST" ? "active-filter" : ""}`}
-                onClick={() => setModelDetailStatus((curr) => curr === "LOST" ? "ALL" : "LOST")}
+                className={`model-breakdown-kpi lost clickable ${
+                  modelDetailStatus === "LOST" ? "active-filter" : ""
+                }`}
+                onClick={() => setModelDetailStatus((curr) => (curr === "LOST" ? "ALL" : "LOST"))}
                 title="Filtrar por perdidas / mermas"
               >
                 <span className="work-eyebrow !text-rose-700 dark:!text-rose-400">PERDIDAS / MERMAS</span>
