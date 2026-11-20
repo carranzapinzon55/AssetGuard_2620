@@ -7,11 +7,11 @@ import { useAuth } from "@/components/auth-provider";
 import { useCurrency } from "@/components/currency-provider";
 import { Combobox } from "@/components/workspace/combobox";
 import { Button, CopyButton, CurrencyDisplay, DataTable, EmptyState, Feedback, FormField, LoadingRows, ModalPortal, PageTitle, PaginationControls, SelectInput, StatusTag, TextInput, useEscapeKey, useModalFocus } from "@/components/workspace/ui";
-import { ASSETS_CATALOG_QUERY, ASSETS_QUERY, CREATE_ASSET, PROVIDERS_QUERY, UPDATE_ASSET, USERS_QUERY } from "@/lib/operations";
+import { ASSETS_CATALOG_QUERY, ASSETS_QUERY, CREATE_ASSET, PROVIDERS_QUERY, REGISTER_ASSET_MUTATION, UPDATE_ASSET, USERS_QUERY } from "@/lib/operations";
 import { errorMessage, queryGraphQL, type AssetItem, type ProviderItem, type UserItem } from "@/lib/workspace";
 
 type AssetsResult = { assets: AssetItem[] };
-type AssetResult = { createAsset: AssetItem; updateAsset: AssetItem };
+type AssetResult = { createAsset?: AssetItem; registerAsset?: AssetItem; updateAsset?: AssetItem };
 const MAX_ASSETS = 50000;
 const blankAsset = { model: "", estimatedValue: "", purchaseDate: "", status: "AVAILABLE", stockQuantity: "1" };
 
@@ -46,6 +46,7 @@ export function AssetsPage() {
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState<{ error?: string; success?: string }>({});
   const [confirmEditOpen, setConfirmEditOpen] = useState(false);
+  const [isNewModelMode, setIsNewModelMode] = useState(false);
 
   // Campos dinámicos según el estado del activo
   const [technicians, setTechnicians] = useState<UserItem[]>([]);
@@ -63,7 +64,7 @@ export function AssetsPage() {
 
   useEffect(() => {
     if (isAdmin) {
-      queryGraphQL<{ users: UserItem[] }>(USERS_QUERY, { limit: 1000 })
+      queryGraphQL<{ users: UserItem[] }>(USERS_QUERY, { limit: 50000 })
         .then((res) => setTechnicians(res.users.filter((u) => u.role === "TECHNICIAN" && u.status)))
         .catch(() => {});
       queryGraphQL<{ providers: ProviderItem[] }>(PROVIDERS_QUERY)
@@ -84,6 +85,58 @@ export function AssetsPage() {
     }
     return list;
   }, [providers, maintenanceProviderName]);
+
+  const modelStats = useMemo(() => {
+    const map = new Map<string, { count: number; latestEstimatedValue?: number }>();
+    for (const a of assets) {
+      const raw = a.model?.trim();
+      if (!raw) continue;
+      const existing = map.get(raw);
+      if (existing) {
+        existing.count += 1;
+        if (a.estimatedValue != null && existing.latestEstimatedValue == null) {
+          existing.latestEstimatedValue = a.estimatedValue;
+        }
+      } else {
+        map.set(raw, {
+          count: 1,
+          latestEstimatedValue: a.estimatedValue ?? undefined,
+        });
+      }
+    }
+    return map;
+  }, [assets]);
+
+  const modelOptions = useMemo(() => {
+    const list = Array.from(modelStats.entries())
+      .map(([modelName, data]) => ({
+        value: modelName,
+        label: `${modelName} (${data.count} ${data.count === 1 ? "unidad" : "unidades"})`,
+      }))
+      .sort((a, b) => a.value.localeCompare(b.value));
+
+    if (form.model && !list.some((item) => item.value.toLowerCase() === form.model.toLowerCase())) {
+      list.unshift({
+        value: form.model,
+        label: form.model,
+      });
+    }
+
+    return list;
+  }, [modelStats, form.model]);
+
+  function handleSelectModel(selectedName: string) {
+    setForm((prev) => {
+      const next = { ...prev, model: selectedName };
+      if (!prev.estimatedValue || prev.estimatedValue.trim() === "" || prev.estimatedValue === "0") {
+        const stats = modelStats.get(selectedName);
+        if (stats?.latestEstimatedValue != null) {
+          next.estimatedValue = convertFromUsd(stats.latestEstimatedValue, assetCurrency).toFixed(2);
+        }
+      }
+      return next;
+    });
+  }
 
   useEscapeKey((formOpen && !saving) || confirmEditOpen, () => {
     if (confirmEditOpen) setConfirmEditOpen(false);
@@ -160,6 +213,7 @@ export function AssetsPage() {
       status: asset.status,
       stockQuantity: String(asset.stockQuantity ?? 1),
     } : blankAsset);
+    setIsNewModelMode(!asset && modelStats.size === 0);
     setLoanTechnicianId("");
     setLoanStartDate(todayIso);
     setLoanDueDate(todayIso);
@@ -179,7 +233,11 @@ export function AssetsPage() {
     setFeedback({});
 
     if (!form.model.trim()) {
-      setFeedback({ error: "Debes ingresar el modelo del activo." });
+      setFeedback({ error: "Debes seleccionar o ingresar el modelo del activo." });
+      return;
+    }
+    if (form.model.trim().length > 120) {
+      setFeedback({ error: "El nombre del modelo no puede superar los 120 caracteres." });
       return;
     }
 
@@ -203,6 +261,14 @@ export function AssetsPage() {
     if (form.purchaseDate > getLocalTodayIso()) {
       setFeedback({ error: "La fecha de compra no puede ser posterior a hoy." });
       return;
+    }
+
+    if (form.status === "AVAILABLE") {
+      const qty = Number(form.stockQuantity);
+      if (!form.stockQuantity || !Number.isInteger(qty) || qty < 1 || qty > 500) {
+        setFeedback({ error: "Las unidades registradas deben ser un número entero entre 1 y 500." });
+        return;
+      }
     }
 
     if (form.status === "LOANED") {
@@ -261,7 +327,7 @@ export function AssetsPage() {
     setSaving(true);
     setFeedback({});
     const stockQuantityValue = form.status === "AVAILABLE"
-      ? (form.stockQuantity ? Number(form.stockQuantity) : 1)
+      ? (form.stockQuantity ? Math.max(1, Math.min(500, Math.floor(Number(form.stockQuantity)))) : 1)
       : (editing ? (editing.stockQuantity ?? 1) : 1);
 
     const input: Record<string, unknown> = {
@@ -272,6 +338,7 @@ export function AssetsPage() {
       purchaseDate: form.purchaseDate || null,
       status: form.status,
       stockQuantity: stockQuantityValue,
+      quantity: stockQuantityValue,
     };
     if (form.status === "LOANED") {
       input.loanTechnicianId = loanTechnicianId;
@@ -289,9 +356,19 @@ export function AssetsPage() {
       input.lostNotes = lostNotes.trim();
     }
     try {
-      if (editing) await queryGraphQL<AssetResult>(UPDATE_ASSET, { input: { id: editing.id, ...input } });
-      else await queryGraphQL<AssetResult>(CREATE_ASSET, { input });
-      setFeedback({ success: editing ? "Activo actualizado." : "Activo registrado." });
+      if (editing) {
+        await queryGraphQL<AssetResult>(UPDATE_ASSET, { input: { id: editing.id, ...input } });
+        setFeedback({ success: "Activo actualizado." });
+      } else {
+        await queryGraphQL<AssetResult>(REGISTER_ASSET_MUTATION, { input });
+        const qty = form.status === "AVAILABLE" ? stockQuantityValue : 1;
+        const modelName = form.model.trim();
+        setFeedback({
+          success: qty > 1
+            ? `Se registraron ${qty} unidades de ${modelName} correctamente.`
+            : `Se registró 1 unidad de ${modelName} correctamente.`,
+        });
+      }
       setFormOpen(false);
       setRefresh((value) => value + 1);
     } catch (error) { setFeedback({ error: errorMessage(error) }); }
@@ -387,11 +464,88 @@ export function AssetsPage() {
             </div>
             <form className="work-form" onSubmit={saveAsset}>
               <div className="work-field"><span>Número de serie</span><div className="copy-value"><span className="serial-badge telemetry-value">{editing?.serialNumber ?? "Autogenerado por el sistema"}</span>{editing?.serialNumber && <CopyButton text={editing.serialNumber} label={`Copiar serie ${editing.serialNumber}`} />}</div></div>
-              <FormField label="Modelo">
-                <TextInput value={form.model} onChange={(event) => setForm({ ...form, model: event.target.value })} required />
-              </FormField>
+              {!isNewModelMode ? (
+                <FormField label="Modelo">
+                  <div className="asset-combobox-row">
+                    <Combobox
+                      value={form.model}
+                      onValueChange={handleSelectModel}
+                      options={modelOptions}
+                      placeholder="Selecciona o busca un modelo..."
+                      searchPlaceholder="Buscar modelo existente..."
+                      emptyMessage="No hay modelos registrados en el inventario."
+                      required
+                    />
+                    {form.model && (
+                      <button
+                        type="button"
+                        className="table-action"
+                        title="Limpiar modelo seleccionado"
+                        aria-label="Limpiar modelo seleccionado"
+                        onClick={() => setForm((prev) => ({ ...prev, model: "" }))}
+                      >
+                        <X size={14} />
+                      </button>
+                    )}
+                  </div>
+                  <div style={{ marginTop: "0.25rem" }}>
+                    <button
+                      type="button"
+                      className="form-hint"
+                      style={{
+                        background: "none",
+                        border: "none",
+                        padding: 0,
+                        cursor: "pointer",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "0.25rem",
+                        textDecoration: "underline",
+                      }}
+                      onClick={() => {
+                        setIsNewModelMode(true);
+                        setForm((prev) => ({ ...prev, model: "" }));
+                      }}
+                    >
+                      <Plus size={13} /> Añadir nuevo modelo al catálogo
+                    </button>
+                  </div>
+                </FormField>
+              ) : (
+                <FormField label="Nuevo modelo">
+                  <TextInput
+                    value={form.model}
+                    onChange={(event) => setForm({ ...form, model: event.target.value })}
+                    placeholder="Escribe el nombre del nuevo modelo (ej. Lenovo ThinkPad T14)"
+                    maxLength={120}
+                    autoFocus
+                    required
+                  />
+                  <div style={{ marginTop: "0.25rem" }}>
+                    <button
+                      type="button"
+                      className="form-hint"
+                      style={{
+                        background: "none",
+                        border: "none",
+                        padding: 0,
+                        cursor: "pointer",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "0.25rem",
+                        textDecoration: "underline",
+                      }}
+                      onClick={() => {
+                        setIsNewModelMode(false);
+                      }}
+                    >
+                      ← Elegir modelo existente del catálogo
+                    </button>
+                  </div>
+                </FormField>
+              )}
               <div className="form-grid two-col">
-                <FormField label="Valor estimado">
+                <FormField label="Valor estimado por unidad">
                   <div className="money-entry">
                     <TextInput className="telemetry-value" type="number" min={assetCurrency === "COP" ? "1000" : "0.25"} step="0.01" value={form.estimatedValue} onChange={(event) => setForm({ ...form, estimatedValue: event.target.value })} required />
                     <SelectInput className="currency-entry-select" value={assetCurrency} onChange={(event) => setAssetCurrency(event.target.value as typeof assetCurrency)} aria-label="Moneda del valor estimado">
@@ -547,6 +701,7 @@ export function AssetsPage() {
                   <TextInput
                     type="number"
                     min="1"
+                    max="500"
                     step="1"
                     value={form.stockQuantity}
                     onChange={(event) => setForm({ ...form, stockQuantity: event.target.value })}
@@ -555,7 +710,7 @@ export function AssetsPage() {
                   <small className="form-hint">
                     {editing
                       ? `Stock total en inventario (${editing.availableQuantity ?? editing.stockQuantity ?? 1} de ${editing.stockQuantity ?? 1} disponibles).`
-                      : "Unidades iniciales del equipo para registrar en el inventario."}
+                      : "Cantidad de unidades físicas que se registrarán individualmente en el inventario (1 a 500)."}
                   </small>
                 </FormField>
               ) : (

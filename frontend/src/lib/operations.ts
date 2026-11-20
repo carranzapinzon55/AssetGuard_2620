@@ -1,5 +1,5 @@
 export const USERS_QUERY = `
-  query Users($limit: Int = 50) {
+  query Users($limit: Int = 5000) {
     users(limit: $limit) { id fullName email role status }
   }
 `;
@@ -17,20 +17,26 @@ export const UPDATE_USER = `
 `;
 
 export const ASSETS_QUERY = `
-  query Assets($limit: Int = 50) {
+  query Assets($limit: Int = 50000) {
     assets(limit: $limit) { id serialNumber model estimatedValue status purchaseDate stockQuantity availableQuantity }
   }
 `;
 
 export const ASSETS_CATALOG_QUERY = `
   query AssetCatalog($limit: Int = 50000) {
-    assets(limit: $limit) { id serialNumber model status stockQuantity availableQuantity }
+    assets(limit: $limit) { id serialNumber model status stockQuantity availableQuantity estimatedValue }
   }
 `;
 
 export const CREATE_ASSET = `
   mutation CreateAsset($input: AssetInput!) {
     createAsset(input: $input) { id serialNumber model estimatedValue status purchaseDate stockQuantity availableQuantity }
+  }
+`;
+
+export const REGISTER_ASSET_MUTATION = `
+  mutation RegisterAsset($input: AssetInput!) {
+    registerAsset(input: $input) { id serialNumber model estimatedValue status purchaseDate stockQuantity availableQuantity }
   }
 `;
 
@@ -152,7 +158,7 @@ export const UPLOAD_ASSETS = `
 `;
 
 export const AUDIT_QUERY = `
-  query AuditLogs($serialNumber: String, $technicianId: ID, $startDate: String, $endDate: String, $status: LoanStatus, $page: Int, $limit: Int = 10) {
+  query AuditLogs($serialNumber: String, $technicianId: ID, $startDate: String, $endDate: String, $status: LoanStatus, $page: Int, $limit: Int = 1000) {
     auditLogs(serialNumber: $serialNumber, technicianId: $technicianId, startDate: $startDate, endDate: $endDate, status: $status, page: $page, limit: $limit) {
       loans {
         id requestDate dueLocalDate returnDateTime status returnCondition
@@ -188,7 +194,7 @@ export const LOST_ASSET_REPORTS_QUERY = `
       reportedAt
       notes
       acknowledged
-      asset { id serialNumber model status }
+      asset { id serialNumber model status estimatedValue }
       loan { id dueLocalDate status }
       reportedByUser { id fullName email role }
     }

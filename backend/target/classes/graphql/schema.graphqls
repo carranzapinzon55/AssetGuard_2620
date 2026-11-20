@@ -21,7 +21,8 @@ type Query {
 type Mutation {
     login(input: LoginInput!): LoginPayload!
     requestPasswordReset(email: String!): PasswordResetPayload!
-    createAsset(input: AssetInput!): Asset!
+    createAsset(input: AssetInput!, quantity: Int): Asset!
+    registerAsset(input: AssetInput!, quantity: Int): Asset!
     updateAsset(input: UpdateAssetInput!): Asset!
     createUser(input: UserInput!): User!
     updateUser(input: UpdateUserInput!): User!
@@ -159,6 +160,7 @@ input AssetInput {
     status: String!
     purchaseDate: String
     stockQuantity: Int
+    quantity: Int
     loanTechnicianId: ID
     loanStartDate: String
     loanDueDate: String
@@ -178,6 +180,7 @@ input UpdateAssetInput {
     status: String!
     purchaseDate: String
     stockQuantity: Int
+    quantity: Int
     loanTechnicianId: ID
     loanStartDate: String
     loanDueDate: String

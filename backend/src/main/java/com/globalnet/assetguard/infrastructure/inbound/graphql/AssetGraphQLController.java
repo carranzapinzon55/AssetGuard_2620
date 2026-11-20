@@ -56,24 +56,46 @@ public class AssetGraphQLController {
 
     @MutationMapping
     @PreAuthorize("hasRole('ADMIN')")
-    public GraphQLViews.AssetView createAsset(@Argument("input") AssetInput input) {
-        int initialStock;
+    public GraphQLViews.AssetView createAsset(
+            @Argument("input") AssetInput input,
+            @Argument("quantity") Integer quantity) {
+        return registerAssetInternal(input, quantity);
+    }
+
+    @MutationMapping
+    @PreAuthorize("hasRole('ADMIN')")
+    public GraphQLViews.AssetView registerAsset(
+            @Argument("input") AssetInput input,
+            @Argument("quantity") Integer quantity) {
+        return registerAssetInternal(input, quantity);
+    }
+
+    private GraphQLViews.AssetView registerAssetInternal(AssetInput input, Integer quantity) {
+        int initialStock = 1;
         if ("AVAILABLE".equalsIgnoreCase(input.status())) {
-            initialStock = (input.stockQuantity() != null && input.stockQuantity() >= 1) ? input.stockQuantity() : 1;
-        } else {
-            initialStock = 1;
+            if (quantity != null && quantity >= 1) {
+                initialStock = quantity;
+            } else if (input.quantity() != null && input.quantity() >= 1) {
+                initialStock = input.quantity();
+            } else if (input.stockQuantity() != null && input.stockQuantity() >= 1) {
+                initialStock = input.stockQuantity();
+            }
         }
-        Asset asset = Asset.builder()
+        if (initialStock < 1 || initialStock > 500) {
+            throw new IllegalArgumentException("Quantity must be between 1 and 500");
+        }
+        Asset template = Asset.builder()
                 .serialNumber(input.serialNumber())
                 .model(input.model())
                 .estimatedValue(input.estimatedValue())
                 .status(input.status())
                 .purchaseDate(input.purchaseDate() == null ? null : LocalDate.parse(input.purchaseDate()))
-                .stockQuantity(initialStock)
+                .stockQuantity(1)
                 .build();
-        Asset savedAsset = assetUseCase.register(asset);
+        List<Asset> savedAssets = assetUseCase.registerMultiple(template, initialStock);
+        Asset firstAsset = savedAssets.get(0);
         handleLifecycleSideEffects(
-                savedAsset,
+                firstAsset,
                 input.status(),
                 input.loanTechnicianId(),
                 input.loanStartDate(),
@@ -84,7 +106,7 @@ public class AssetGraphQLController {
                 input.maintenanceCost(),
                 input.maintenanceProviderName(),
                 input.lostNotes());
-        Asset reloaded = assetUseCase.findById(savedAsset.getId());
+        Asset reloaded = assetUseCase.findById(firstAsset.getId());
         return GraphQLViews.AssetView.from(reloaded);
     }
 
@@ -189,6 +211,7 @@ public class AssetGraphQLController {
             String status,
             String purchaseDate,
             Integer stockQuantity,
+            Integer quantity,
             Long loanTechnicianId,
             String loanStartDate,
             String loanDueDate,
@@ -211,6 +234,7 @@ public class AssetGraphQLController {
             String status,
             String purchaseDate,
             Integer stockQuantity,
+            Integer quantity,
             Long loanTechnicianId,
             String loanStartDate,
             String loanDueDate,

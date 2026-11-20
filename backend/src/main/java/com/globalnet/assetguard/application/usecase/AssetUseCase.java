@@ -50,6 +50,32 @@ public class AssetUseCase {
         return savedAsset;
     }
 
+    @Transactional
+    public List<Asset> registerMultiple(Asset template, Integer quantity) {
+        if (template == null) {
+            throw new IllegalArgumentException("Asset must not be null");
+        }
+        int qty = 1;
+        if ("AVAILABLE".equalsIgnoreCase(template.getStatus())) {
+            qty = quantity != null ? quantity : (template.getStockQuantity() != null ? template.getStockQuantity() : 1);
+        }
+        if (qty < 1 || qty > 500) {
+            throw new IllegalArgumentException("Quantity must be between 1 and 500");
+        }
+        List<Asset> createdAssets = new java.util.ArrayList<>(qty);
+        for (int i = 0; i < qty; i++) {
+            Asset asset = Asset.builder()
+                    .model(template.getModel())
+                    .estimatedValue(template.getEstimatedValue())
+                    .status(template.getStatus())
+                    .purchaseDate(template.getPurchaseDate())
+                    .stockQuantity(1)
+                    .build();
+            createdAssets.add(register(asset));
+        }
+        return createdAssets;
+    }
+
     public Asset findById(Long id) {
         if (id == null) {
             throw new IllegalArgumentException("Asset ID must not be null");

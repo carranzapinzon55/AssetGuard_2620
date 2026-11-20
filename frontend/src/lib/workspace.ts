@@ -119,7 +119,7 @@ export type LostAssetReportItem = {
   reportedAt: string;
   notes: string | null;
   acknowledged: boolean;
-  asset: Pick<AssetItem, "id" | "serialNumber" | "model" | "status">;
+  asset: Pick<AssetItem, "id" | "serialNumber" | "model" | "status" | "estimatedValue">;
   loan?: Pick<LoanItem, "id" | "dueLocalDate" | "status"> | null;
   reportedByUser?: Pick<UserItem, "id" | "fullName" | "email" | "role"> | null;
 };

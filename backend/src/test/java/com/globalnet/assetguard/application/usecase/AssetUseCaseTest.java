@@ -7,11 +7,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.globalnet.assetguard.domain.model.Asset;
 import com.globalnet.assetguard.domain.ports.output.AssetRepositoryPort;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -141,6 +143,55 @@ class AssetUseCaseTest {
 
         assertEquals(5, updated.getStockQuantity());
         assertEquals("UNDER_MAINTENANCE", updated.getStatus());
+    }
+
+    @Test
+    void registerMultipleCreatesRequestedQuantityOfAssetsWithUniqueSerials() {
+        Asset template = Asset.builder()
+                .model("Audi pro 3472")
+                .status("AVAILABLE")
+                .estimatedValue(1200.0)
+                .build();
+        when(assetRepositoryPort.save(any(Asset.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        List<Asset> created = assetUseCase.registerMultiple(template, 5);
+
+        assertEquals(5, created.size());
+        java.util.Set<String> serials = new java.util.HashSet<>();
+        for (Asset a : created) {
+            assertEquals("Audi pro 3472", a.getModel());
+            assertEquals(1, a.getStockQuantity());
+            assertTrue(a.getSerialNumber().startsWith("SN-AUDI-"));
+            serials.add(a.getSerialNumber());
+        }
+        assertEquals(5, serials.size(), "Each unit must have a unique generated serial number");
+        verify(auditLogUseCase, times(5)).record(eq("ASSET_CREATED"), eq("ASSET"), any(), anyString());
+    }
+
+    @Test
+    void registerMultipleValidatesQuantityLimits() {
+        Asset template = Asset.builder()
+                .model("Lenovo ThinkPad")
+                .status("AVAILABLE")
+                .build();
+
+        assertThrows(IllegalArgumentException.class, () -> assetUseCase.registerMultiple(template, 0));
+        assertThrows(IllegalArgumentException.class, () -> assetUseCase.registerMultiple(template, 501));
+        assertThrows(IllegalArgumentException.class, () -> assetUseCase.registerMultiple(null, 5));
+    }
+
+    @Test
+    void registerMultipleForcesQuantityToOneWhenStatusIsNotAvailable() {
+        Asset template = Asset.builder()
+                .model("MacBook Pro")
+                .status("LOANED")
+                .build();
+        when(assetRepositoryPort.save(any(Asset.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        List<Asset> created = assetUseCase.registerMultiple(template, 10);
+
+        assertEquals(1, created.size());
+        assertEquals(1, created.get(0).getStockQuantity());
     }
 
     @Test

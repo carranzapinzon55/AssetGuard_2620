@@ -222,7 +222,7 @@ export function LoginForm() {
 
           <div className="login-card-footer">
             <span><span className="small-status-dot" /> ACCESO MONITORIZADO</span>
-            <span>¿Problemas de acceso? Contacta con soporte</span>
+            <span>¿Problemas de acceso? Contacta un administrador</span>
           </div>
         </div>
 

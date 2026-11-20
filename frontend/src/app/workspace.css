@@ -473,7 +473,7 @@ html.dark .modal-backdrop { background: rgb(2 6 23 / 74%); }
 }
 .confirmation-backdrop { z-index: 1100; }
 .confirm-dialog { width: min(440px, 100%); }
-.detail-dialog { width: min(560px, 100%); }
+.detail-dialog { width: min(700px, 100%); }
 
 html:not(.dark) body,
 html:not(.dark) .workspace-main { background-color: #f1f5f4; }
@@ -486,16 +486,27 @@ html:not(.dark) .workspace-main { background-color: #f1f5f4; }
 .model-availability { display: flex; flex-direction: column; gap: 16px; padding: 18px; border-top: 1px solid #e2e8f0; }
 .model-availability-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .model-availability-intro p { margin: 4px 0 0; color: #64748b; font-size: 11px; line-height: 1.5; }
+.model-availability-legend { display: flex; align-items: center; gap: 12px; font-size: 11px; flex-wrap: wrap; margin-top: 6px; }
+.model-availability-legend .legend-item { display: inline-flex; align-items: center; gap: 5px; color: #64748b; font-weight: 500; }
+.model-availability-legend .legend-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+.legend-dot.available, .bar-seg-available { background-color: #10b981; }
+.legend-dot.loaned, .bar-seg-loaned { background-color: #3b82f6; }
+.legend-dot.maintenance, .bar-seg-maintenance { background-color: #f59e0b; }
+.legend-dot.lost, .bar-seg-lost { background-color: #ef4444; }
 .model-availability-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .model-availability-controls .search-control { width: 220px; }
 .model-availability-controls .filter-select { font-size: 11px; height: 32px; padding: 0 8px; }
 .model-availability ul { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
-.model-availability-row { display: grid; grid-template-columns: minmax(140px, 1fr) minmax(90px, 1.4fr) auto; align-items: center; gap: 14px; width: 100%; padding: 8px 12px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: #475569; font-size: 11px; text-align: left; cursor: pointer; transition: all 150ms ease; }
+.model-availability-row { display: grid; grid-template-columns: minmax(130px, 1fr) minmax(110px, 1.4fr) auto; align-items: center; gap: 14px; width: 100%; padding: 8px 12px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: #475569; font-size: 11px; text-align: left; cursor: pointer; transition: all 150ms ease; }
 .model-availability-row:hover { background: #f1f5f9; border-color: #cbd5e1; }
 .model-availability-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; color: #1e293b; }
 .model-availability-track { height: 7px; overflow: hidden; border-radius: 99px; background: #e2e8f0; }
 .model-availability-track i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #10b981, #38bdf8); }
+.model-availability-track.stacked-bar { display: flex; height: 8px; border-radius: 99px; overflow: hidden; background: #e2e8f0; width: 100%; }
+.model-availability-track.stacked-bar .bar-seg { height: 100%; transition: width 200ms ease; }
 .model-availability-count { color: #0f766e; font-size: 11px; font-weight: 600; }
+.model-availability-counts { color: #64748b; font-size: 11px; white-space: nowrap; text-align: right; }
+.model-availability-counts strong { color: #0f766e; font-weight: 600; }
 .model-availability-empty { color: #64748b; font-size: 11px; padding: 12px 0; }
 
 /* Modal Dar de baja definitiva */
@@ -513,7 +524,10 @@ html:not(.dark) .workspace-main { background-color: #f1f5f4; }
 
 /* Desglose de flota por modelo en modal */
 .model-breakdown-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 16px; }
-.model-breakdown-kpi { border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; }
+.model-breakdown-kpi { border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; text-align: left; }
+.model-breakdown-kpi.clickable { cursor: pointer; transition: all 150ms ease; border-width: 1.5px; }
+.model-breakdown-kpi.clickable:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06); }
+.model-breakdown-kpi.active-filter { outline: 2px solid currentColor; outline-offset: 1px; box-shadow: 0 0 0 2px currentColor; }
 .model-breakdown-kpi strong { font-size: 18px; font-weight: 700; }
 .model-breakdown-kpi span { font-size: 10px; text-transform: uppercase; font-weight: 600; }
 .model-breakdown-kpi.available { background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; }
@@ -523,6 +537,15 @@ html:not(.dark) .workspace-main { background-color: #f1f5f4; }
 .model-breakdown-serials { max-height: 240px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px; }
 .model-breakdown-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid #f1f5f9; font-size: 12px; }
 .model-breakdown-row:last-child { border-bottom: none; }
+
+/* Tablas de desglose enriquecido en modales de métricas */
+.metric-breakdown-table-wrap { overflow-x: auto; max-height: 360px; border: 1px solid #e2e8f0; border-radius: 8px; margin-top: 10px; }
+.metric-breakdown-table { width: 100%; border-collapse: collapse; font-size: 11px; text-align: left; }
+.metric-breakdown-table th { position: sticky; top: 0; background: #f8fafc; padding: 8px 10px; font-weight: 600; color: #475569; border-bottom: 1px solid #e2e8f0; z-index: 1; }
+.metric-breakdown-table td { padding: 8px 10px; border-bottom: 1px solid #f1f5f9; color: #1e293b; vertical-align: middle; }
+.metric-breakdown-table tr:last-child td { border-bottom: none; }
+.metric-breakdown-table tr:hover td { background: #f8fafc; }
+.metric-breakdown-section-title { font-size: 12px; font-weight: 700; color: #1e293b; margin: 16px 0 6px; display: flex; align-items: center; justify-content: space-between; }
 .insight-card {
   display: flex; min-width: 0; min-height: 145px; flex-direction: column; align-items: flex-start; gap: 10px;
   padding: 16px; border: 1px solid rgb(226 232 240 / 85%); border-radius: 10px; background: rgb(255 255 255 / 84%);
@@ -572,8 +595,18 @@ html.dark .model-availability-row { color: #cbd5e1; }
 html.dark .model-availability-row:hover { background: rgba(30, 41, 59, 0.7); border-color: #334155; }
 html.dark .model-availability-name { color: #f1f5f9; }
 html.dark .model-availability-track { background: #334155; }
+html.dark .model-availability-track.stacked-bar { background: #334155; }
 html.dark .model-availability-count { color: #34d399; }
+html.dark .model-availability-counts { color: #94a3b8; }
+html.dark .model-availability-counts strong { color: #34d399; }
+html.dark .model-availability-legend .legend-item { color: #94a3b8; }
 html.dark .model-availability-intro p { color: #94a3b8; }
+
+html.dark .metric-breakdown-table-wrap { border-color: #334155; }
+html.dark .metric-breakdown-table th { background: #1e293b; color: #cbd5e1; border-color: #334155; }
+html.dark .metric-breakdown-table td { color: #e2e8f0; border-color: #334155; }
+html.dark .metric-breakdown-table tr:hover td { background: rgba(30, 41, 59, 0.5); }
+html.dark .metric-breakdown-section-title { color: #f1f5f9; }
 
 html.dark .decommission-summary { background: rgba(15, 23, 42, 0.85); border-color: #334155; color: #f8fafc; }
 html.dark .decommission-summary strong { color: #94a3b8; }
